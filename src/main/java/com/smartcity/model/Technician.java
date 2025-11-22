@@ -10,11 +10,10 @@ public class Technician {
     private String name;
     private String email;
     private String phone;
-    private String logID;
-    private String mofPasse;
+    private String password; // encrypted - removed mofPasse
     private Boolean available;
     private Double rating;
-    private String photoUrl;  // Corrected from photoluf
+    private String photoUrl;
     
     // Constructors
     public Technician() {
@@ -22,12 +21,11 @@ public class Technician {
         this.rating = 0.0;
     }
     
-    public Technician(String name, String email, String phone, String logID, String mofPasse, String photoUrl) {
+    public Technician(String name, String email, String phone, String password, String photoUrl) {
         this.name = name;
         this.email = email;
         this.phone = phone;
-        this.logID = logID;
-        this.mofPasse = mofPasse;
+        this.password = password;
         this.photoUrl = photoUrl;
         this.available = true;
         this.rating = 0.0;
@@ -46,11 +44,8 @@ public class Technician {
     public String getPhone() { return phone; }
     public void setPhone(String phone) { this.phone = phone; }
     
-    public String getLogID() { return logID; }
-    public void setLogID(String logID) { this.logID = logID; }
-    
-    public String getMofPasse() { return mofPasse; }
-    public void setMofPasse(String mofPasse) { this.mofPasse = mofPasse; }
+    public String getPassword() { return password; }
+    public void setPassword(String password) { this.password = password; }
     
     public Boolean getAvailable() { return available; }
     public void setAvailable(Boolean available) { this.available = available; }
@@ -61,7 +56,7 @@ public class Technician {
     public String getPhotoUrl() { return photoUrl; }
     public void setPhotoUrl(String photoUrl) { this.photoUrl = photoUrl; }
     
-    // Business methods from your diagram
+    // Business methods
     public void unavailable() {
         this.available = false;
     }
@@ -70,18 +65,11 @@ public class Technician {
         this.available = true;
     }
     
-    public Double getNullMatch() {
-        // This seems like it might be a placeholder method from your diagram
-        // Possibly meant to calculate skill match or availability?
-        return this.rating; // Returning rating as placeholder
-    }
-    
     public boolean authenticate(String inputPassword) {
-        return this.mofPasse.equals(inputPassword);
+        return this.password.equals(inputPassword);
     }
     
     public void updateRating(Double newRating) {
-        // Simple rating update - you might want more complex logic
         this.rating = newRating;
     }
     
