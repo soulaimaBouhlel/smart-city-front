@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart City - Interactive Map</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .container {
+            display: flex;
+            height: calc(100vh - 100px);
+        }
+
+        .sidebar {
+            width: 300px;
+            background: white;
+            padding: 20px;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.05);
+            overflow-y: auto;
+        }
+
+        .sidebar h3 {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 18px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-card .number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-card .label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .legend {
+            margin-top: 20px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+
+        .equipment-color {
+            background: #3388ff;
+        }
+
+        .intervention-color {
+            background: #ff6b6b;
+        }
+
+        #map {
+            flex: 1;
+            height: 100%;
+        }
+
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px 40px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+        }
+
+        .error {
+            background: #ff6b6b;
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+
+        /* Custom popup styles */
+        .leaflet-popup-content-wrapper {
+            border-radius: 8px;
+        }
+
+        .popup-title {
+            font-weight: bold;
+            font-size: 16px;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .popup-info {
+            font-size: 13px;
+            line-height: 1.6;
+            color: #666;
+        }
+
+        .popup-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+
+        .status-active {
+            background: #51cf66;
+            color: white;
+        }
+
+        .status-pending {
+            background: #ffd43b;
+            color: #333;
+        }
+
+        .status-in-progress {
+            background: #339af0;
+            color: white;
+        }
+
+        .status-completed {
+            background: #51cf66;
+            color: white;
+        }
+
+        .priority-high,
+        .priority-critical {
+            background: #ff6b6b;
+            color: white;
+        }
+
+        .priority-medium {
+            background: #ffd43b;
+            color: #333;
+        }
+
+        .priority-low {
+            background: #51cf66;
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <h1>🏙️ Smart City Interactive Map</h1>
+        <p>Real-time visualization of city equipment and interventions</p>
+    </div>
+
+    <div class="container">
+        <div class="sidebar">
+            <h3>📊 Statistics</h3>
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="number" id="equipment-count">0</div>
+                    <div class="label">Equipment</div>
+                </div>
+                <div class="stat-card">
+                    <div class="number" id="intervention-count">0</div>
+                    <div class="label">Interventions</div>
+                </div>
+            </div>
+
+            <div class="legend">
+                <h3>🗺️ Legend</h3>
+                <div class="legend-item">
+                    <div class="legend-color equipment-color"></div>
+                    <span>Equipment (Street lights, sensors, etc.)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color intervention-color"></div>
+                    <span>Interventions (Repairs, maintenance, etc.)</span>
+                </div>
+            </div>
+
+            <div id="error-container"></div>
+        </div>
+
+        <div id="map"></div>
+    </div>
+
+    <div class="loading" id="loading">
+        Loading map data...
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        // Initialize map
+        const map = L.map('map').setView([36.8065, 10.1815], 13); // Default: Tunis, Tunisia
+
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+        }).addTo(map);
+
+        // Marker storage
+        const markers = [];
+
+        // Custom icons
+        const equipmentIcon = L.icon({
+            iconUrl: 'data:image/svg+xml;base64,' + btoa(`
+                <svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41">
+                    <path fill="#3388ff" stroke="#fff" stroke-width="2" d="M12.5 0C5.6 0 0 5.6 0 12.5c0 8.4 12.5 28.5 12.5 28.5S25 20.9 25 12.5C25 5.6 19.4 0 12.5 0z"/>
+                    <circle cx="12.5" cy="12.5" r="6" fill="#fff"/>
+                </svg>
+            `),
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [0, -41]
+        });
+
+        const interventionIcon = L.icon({
+            iconUrl: 'data:image/svg+xml;base64,' + btoa(`
+                <svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41">
+                    <path fill="#ff6b6b" stroke="#fff" stroke-width="2" d="M12.5 0C5.6 0 0 5.6 0 12.5c0 8.4 12.5 28.5 12.5 28.5S25 20.9 25 12.5C25 5.6 19.4 0 12.5 0z"/>
+                    <circle cx="12.5" cy="12.5" r="6" fill="#fff"/>
+                </svg>
+            `),
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [0, -41]
+        });
+
+        // Create popup content
+        function createPopupContent(point) {
+            let content = `<div class="popup-title">${point.label}</div>`;
+            content += `<div class="popup-info">`;
+
+            if (point.type === 'equipment') {
+                content += `<strong>Type:</strong> ${point.metadata.equipmentType || 'N/A'}<br>`;
+                content += `<strong>Status:</strong> <span class="popup-badge status-${point.status.toLowerCase()}">${point.status}</span><br>`;
+                if (point.metadata.lastMaintenance) {
+                    content += `<strong>Last Maintenance:</strong> ${new Date(point.metadata.lastMaintenance).toLocaleDateString()}<br>`;
+                }
+            } else {
+                content += `<strong>Type:</strong> ${point.metadata.interventionType || 'N/A'}<br>`;
+                content += `<strong>Status:</strong> <span class="popup-badge status-${point.status.toLowerCase().replace('_', '-')}">${point.status}</span><br>`;
+                content += `<strong>Priority:</strong> <span class="popup-badge priority-${point.metadata.priority.toLowerCase()}">${point.metadata.priority}</span><br>`;
+                if (point.metadata.description) {
+                    content += `<strong>Description:</strong> ${point.metadata.description}<br>`;
+                }
+                if (point.metadata.createdDate) {
+                    content += `<strong>Created:</strong> ${new Date(point.metadata.createdDate).toLocaleDateString()}<br>`;
+                }
+            }
+
+            if (point.metadata.address) {
+                content += `<strong>Address:</strong> ${point.metadata.address}<br>`;
+            }
+
+            content += `<strong>Coordinates:</strong> ${point.latitude.toFixed(6)}, ${point.longitude.toFixed(6)}`;
+            content += `</div>`;
+
+            return content;
+        }
+
+        // Load and display map points
+        async function loadMapData() {
+            try {
+                const response = await fetch('http://localhost:8080/api/map/all');
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const points = await response.json();
+
+                // Clear existing markers
+                markers.forEach(marker => map.removeLayer(marker));
+                markers.length = 0;
+
+                // Count by type
+                let equipmentCount = 0;
+                let interventionCount = 0;
+
+                // Add markers
+                points.forEach(point => {
+                    const icon = point.type === 'equipment' ? equipmentIcon : interventionIcon;
+                    const marker = L.marker([point.latitude, point.longitude], { icon })
+                        .bindPopup(createPopupContent(point))
+                        .addTo(map);
+
+                    markers.push(marker);
+
+                    if (point.type === 'equipment') {
+                        equipmentCount++;
+                    } else {
+                        interventionCount++;
+                    }
+                });
+
+                // Update stats
+                document.getElementById('equipment-count').textContent = equipmentCount;
+                document.getElementById('intervention-count').textContent = interventionCount;
+
+                // Fit map to show all markers
+                if (markers.length > 0) {
+                    const group = L.featureGroup(markers);
+                    map.fitBounds(group.getBounds().pad(0.1));
+                }
+
+                // Hide loading
+                document.getElementById('loading').style.display = 'none';
+
+            } catch (error) {
+                console.error('Error loading map data:', error);
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error-container').innerHTML = `
+                    <div class="error">
+                        <strong>Error:</strong> Failed to load map data. Make sure the backend is running on http://localhost:8080
+                    </div>
+                `;
+            }
+        }
+
+        // Load data on page load
+        loadMapData();
+    </script>
+</body>
+
+</html>
