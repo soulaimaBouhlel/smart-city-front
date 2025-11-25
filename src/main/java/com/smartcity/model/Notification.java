@@ -19,19 +19,14 @@ public class Notification {
 
     @Id
     private String id;
-    private String userId;
-    private UserRole userRole;
-    private NotificationType type;
+    private String title;
     private String message;
+    private NotificationType type;
+    private String recipientId;
     private LocalDateTime timestamp;
-    private boolean read;
     private Map<String, Object> metadata;
 
-    public enum UserRole {
-        CITIZEN, TECHNICIAN
-    }
-
     public enum NotificationType {
-        INFO, WARNING, CRITICAL
+        EMAIL, SMS, REALTIME, PUSH, SYSTEM
     }
 }

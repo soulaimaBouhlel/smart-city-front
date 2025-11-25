@@ -1,42 +1,47 @@
 package com.smartcity.controller;
 
 import com.smartcity.model.Notification;
-import com.smartcity.service.NotificationService;
+import com.smartcity.repository.NotificationRepository;
+import com.smartcity.service.BasicNotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
+import java.time.LocalDateTime;
+import java.util.UUID;
 
 @RestController
-@RequestMapping("/notifications")
+@RequestMapping("/api/notifications")
 @RequiredArgsConstructor
 public class NotificationController {
 
-    private final NotificationService notificationService;
+    private final NotificationRepository notificationRepository;
+    private final BasicNotificationService basicNotificationService;
 
-    @GetMapping("/{userId}")
-    public ResponseEntity<List<Notification>> getNotifications(@PathVariable String userId) {
-        return ResponseEntity.ok(notificationService.getNotificationsForUser(userId));
-    }
-
-    @PostMapping("/mark-read/{notificationId}")
-    public ResponseEntity<Void> markAsRead(@PathVariable String notificationId) {
-        notificationService.markAsRead(notificationId);
-        return ResponseEntity.ok().build();
+    @GetMapping("/{recipientId}")
+    public ResponseEntity<java.util.List<Notification>> getNotifications(@PathVariable String recipientId) {
+        return ResponseEntity.ok(notificationRepository.findByRecipientId(recipientId));
     }
 
     @PostMapping("/send")
     public ResponseEntity<Void> sendNotification(@RequestBody NotificationRequest request) {
-        notificationService.sendNotification(request.getUserId(), request.getRole(), request.getType(),
-                request.getMessage());
+        Notification notification = Notification.builder()
+                .id(UUID.randomUUID().toString())
+                .title("Notification") // Default title, maybe add to request
+                .message(request.getMessage())
+                .type(request.getType())
+                .recipientId(request.getRecipientId())
+                .timestamp(LocalDateTime.now())
+                .build();
+
+        basicNotificationService.sendNotification(notification);
+
         return ResponseEntity.ok().build();
     }
 
     @lombok.Data
     public static class NotificationRequest {
-        private String userId;
-        private Notification.UserRole role;
+        private String recipientId;
         private Notification.NotificationType type;
         private String message;
     }

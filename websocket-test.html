@@ -1,16 +1,41 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>Notification Test</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.1/sockjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
     <style>
-        body { font-family: sans-serif; padding: 20px; }
-        #notifications { border: 1px solid #ccc; padding: 10px; margin-top: 10px; min-height: 200px; }
-        .notification { padding: 10px; border-bottom: 1px solid #eee; animation: flash 1s; }
-        @keyframes flash { from { background-color: yellow; } to { background-color: white; } }
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+        }
+
+        #notifications {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-top: 10px;
+            min-height: 200px;
+        }
+
+        .notification {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            animation: flash 1s;
+        }
+
+        @keyframes flash {
+            from {
+                background-color: yellow;
+            }
+
+            to {
+                background-color: white;
+            }
+        }
     </style>
 </head>
+
 <body>
     <h2>Real-time Notification Tester</h2>
     <div>
@@ -29,16 +54,16 @@
             var userId = document.getElementById('userId').value;
             var socket = new SockJS('http://localhost:8080/ws');
             stompClient = Stomp.over(socket);
-            
+
             stompClient.connect({}, function (frame) {
                 setConnected(true);
                 console.log('Connected: ' + frame);
                 document.getElementById("status").innerText = "Status: Connected to /topic/notifications/" + userId;
-                
+
                 stompClient.subscribe('/topic/notifications/' + userId, function (notification) {
                     showNotification(JSON.parse(notification.body));
                 });
-            }, function(error) {
+            }, function (error) {
                 console.log(error);
                 document.getElementById("status").innerText = "Status: Error - " + error;
             });
@@ -62,10 +87,12 @@
             var notificationsDiv = document.getElementById('notifications');
             var p = document.createElement('div');
             p.className = 'notification';
-            p.innerHTML = '<strong>[' + notification.type + ']</strong> ' + notification.message + 
-                          '<br><small>' + new Date(notification.timestamp).toLocaleString() + '</small>';
+            p.innerHTML = '<strong>[' + notification.type + '] ' + (notification.title ? notification.title : '') + '</strong><br>' +
+                notification.message +
+                '<br><small>' + new Date(notification.timestamp).toLocaleString() + '</small>';
             notificationsDiv.prepend(p);
         }
     </script>
 </body>
+
 </html>
