@@ -51,4 +51,17 @@ public class Intervention {
     public enum Status {
         PENDING, IN_PROGRESS, COMPLETED, CANCELLED
     }
+
+    // MANUALLY ADD ONLY THE GETTERS THAT WERE MISSING (no setters)
+    public String getTitle() {
+        return this.title;
+    }
+
+    public String getInterventionType() {
+        return this.interventionType;
+    }
+
+    public Location getLocation() {
+        return this.location;
+    }
 }

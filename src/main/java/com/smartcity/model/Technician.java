@@ -2,6 +2,8 @@ package com.smartcity.model;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
+import java.util.Set;
+import java.util.HashSet;
 
 @Document(collection = "technicians")
 public class Technician {
@@ -15,10 +17,16 @@ public class Technician {
     private Double rating;
     private String photoUrl;
     
+    // NEW FIELDS FOR SMART SCHEDULING
+    private Set<Skill> skills = new HashSet<>();
+    private Location location;
+    private Integer currentWorkload = 0;
+    
     // Constructors
     public Technician() {
         this.available = true;
         this.rating = 0.0;
+        this.currentWorkload = 0;
     }
     
     public Technician(String name, String email, String phone, String password, String photoUrl) {
@@ -29,6 +37,7 @@ public class Technician {
         this.photoUrl = photoUrl;
         this.available = true;
         this.rating = 0.0;
+        this.currentWorkload = 0;
     }
     
     // Getters and Setters
@@ -56,6 +65,18 @@ public class Technician {
     public String getPhotoUrl() { return photoUrl; }
     public void setPhotoUrl(String photoUrl) { this.photoUrl = photoUrl; }
     
+    // NEW GETTERS AND SETTERS FOR SMART SCHEDULING
+    public Set<Skill> getSkills() { return skills; }
+    public void setSkills(Set<Skill> skills) { this.skills = skills; }
+    
+    public Location getLocation() { return location; }
+    public void setLocation(Location location) { this.location = location; }
+    
+    public Integer getCurrentWorkload() { return currentWorkload; }
+    public void setCurrentWorkload(Integer currentWorkload) { 
+        this.currentWorkload = currentWorkload; 
+    }
+    
     // Business methods
     public void unavailable() {
         this.available = false;
@@ -63,6 +84,12 @@ public class Technician {
     
     public void available() {
         this.available = true;
+    }
+    
+    public boolean isAvailable() {
+        return Boolean.TRUE.equals(this.available) && 
+               this.currentWorkload != null && 
+               this.currentWorkload < 5; // Max 4 concurrent jobs
     }
     
     public boolean authenticate(String inputPassword) {
@@ -73,6 +100,33 @@ public class Technician {
         this.rating = newRating;
     }
     
+    // NEW BUSINESS METHODS FOR SMART SCHEDULING
+    public void increaseWorkload() { 
+        if (this.currentWorkload == null) this.currentWorkload = 0;
+        this.currentWorkload++; 
+    }
+    
+    public void decreaseWorkload() { 
+        if (this.currentWorkload != null && this.currentWorkload > 0) {
+            this.currentWorkload--; 
+        }
+    }
+    
+    public boolean hasSkill(Skill skill) {
+        return this.skills != null && this.skills.contains(skill);
+    }
+    
+    public double calculateSkillMatch(Set<Skill> requiredSkills) {
+        if (requiredSkills == null || requiredSkills.isEmpty()) return 1.0;
+        if (this.skills == null || this.skills.isEmpty()) return 0.0;
+        
+        long matches = requiredSkills.stream()
+                .filter(this.skills::contains)
+                .count();
+        
+        return (double) matches / requiredSkills.size();
+    }
+    
     @Override
     public String toString() {
         return "Technician{" +
@@ -80,6 +134,8 @@ public class Technician {
                 ", name='" + name + '\'' +
                 ", email='" + email + '\'' +
                 ", available=" + available +
+                ", skills=" + skills +
+                ", workload=" + currentWorkload +
                 ", rating=" + rating +
                 '}';
     }
