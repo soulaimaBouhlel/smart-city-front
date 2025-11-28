@@ -86,6 +86,12 @@ public class Technician {
         this.available = true;
     }
     
+    public boolean isAvailable() {
+        return Boolean.TRUE.equals(this.available) && 
+               this.currentWorkload != null && 
+               this.currentWorkload < 5; // Max 4 concurrent jobs
+    }
+    
     public boolean authenticate(String inputPassword) {
         return this.password.equals(inputPassword);
     }

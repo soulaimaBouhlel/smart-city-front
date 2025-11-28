@@ -3,6 +3,8 @@ package com.smartcity.controller;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import com.smartcity.service.SmartSchedulerService;
+import com.smartcity.repository.EquipmentRepository;
+import com.smartcity.repository.InterventionRepository;
 import com.smartcity.model.*;
 import java.util.*;
 
@@ -13,6 +15,12 @@ public class SchedulerController {
     @Autowired
     private SmartSchedulerService smartSchedulerService;
     
+    @Autowired
+    private InterventionRepository interventionRepository;
+    
+    @Autowired
+    private EquipmentRepository equipmentRepository; 
+    
     @GetMapping("/test")
     public String testScheduler() {
         return "<h1>🚀 Smart Scheduler API</h1>" +
@@ -21,6 +29,7 @@ public class SchedulerController {
                "<li><a href='/api/scheduler/test-urgency'>/api/scheduler/test-urgency</a> - Test urgency analysis</li>" +
                "<li><a href='/api/scheduler/test-assignment'>/api/scheduler/test-assignment</a> - Test technician assignment</li>" +
                "<li><a href='/api/scheduler/analyze?description=problem'>/api/scheduler/analyze?description=PROBLEM</a> - Analyze specific problem</li>" +
+               "<li><a href='/api/scheduler/init-equipment'>/api/scheduler/init-equipment</a> - Initialize Equipment Data</li>" + // ADDED THIS LINE
                "</ul>";
     }
     
@@ -66,7 +75,6 @@ public class SchedulerController {
         // Create mock interventions using the Builder pattern
         List<Intervention> testInterventions = Arrays.asList(
             Intervention.builder()
-                .interventionId("test1")
                 .title("Street Light Repair")
                 .description("Broken street light on Main St")
                 .interventionType("STREET_LIGHT")
@@ -75,7 +83,6 @@ public class SchedulerController {
                 .build(),
                 
             Intervention.builder()
-                .interventionId("test2")
                 .title("Water Pipe Burst")
                 .description("Water pipe burst flooding street")
                 .interventionType("WATER_LEAK")
@@ -84,7 +91,6 @@ public class SchedulerController {
                 .build(),
                 
             Intervention.builder()
-                .interventionId("test3")
                 .title("Road Repair")
                 .description("Pothole on highway needs repair")
                 .interventionType("ROAD_REPAIR")
@@ -98,14 +104,20 @@ public class SchedulerController {
         
         for (int i = 0; i < testInterventions.size(); i++) {
             Intervention intervention = testInterventions.get(i);
+            
+            // ✅ SAVE TO DATABASE
+            Intervention savedIntervention = interventionRepository.save(intervention);
+            
             String bestTech = smartSchedulerService.findBestTechnician(intervention, technicians);
             
             result.append(String.format(
                 "=== INTERVENTION %d ===\n" +
                 "Title: %s\n" +
                 "Type: %s\n" +
-                "Best Technician: %s\n\n",
-                i + 1, intervention.getTitle(), intervention.getInterventionType(), bestTech
+                "Best Technician: %s\n" +
+                "Saved to DB with ID: %s\n\n",
+                i + 1, intervention.getTitle(), intervention.getInterventionType(), 
+                bestTech, savedIntervention.getInterventionId()
             ));
         }
         
@@ -120,7 +132,6 @@ public class SchedulerController {
             
             // Create a mock intervention using Builder pattern
             Intervention intervention = Intervention.builder()
-                .interventionId("auto-" + System.currentTimeMillis())
                 .title("Auto-generated from description")
                 .description(description)
                 .interventionType(determineInterventionType(description))
@@ -128,6 +139,9 @@ public class SchedulerController {
                 .location(new Location())
                 .priorityScore(urgency)
                 .build();
+            
+            // ✅ SAVE TO DATABASE
+            Intervention savedIntervention = interventionRepository.save(intervention);
             
             List<Technician> technicians = smartSchedulerService.createMockTechnicians();
             String bestTech = smartSchedulerService.findBestTechnician(intervention, technicians);
@@ -139,9 +153,10 @@ public class SchedulerController {
                 + "Urgency Score: %d/10\n"
                 + "Priority: %s\n"
                 + "Recommended Technician: %s\n"
+                + "Saved to DB with ID: %s\n"
                 + "Status: ✅ ANALYSIS COMPLETE"
                 + "</pre>", description, intervention.getInterventionType(), urgency, 
-                intervention.getPriority(), bestTech);
+                intervention.getPriority(), bestTech, savedIntervention.getInterventionId());
                 
         } catch (Exception e) {
             return String.format("<pre>"
@@ -167,5 +182,55 @@ public class SchedulerController {
         if (urgency >= 7) return Intervention.Priority.HIGH;
         if (urgency >= 5) return Intervention.Priority.MEDIUM;
         return Intervention.Priority.LOW;
+    }
+    
+    @GetMapping("/init-equipment")
+    public String initializeEquipment() {
+        try {
+            // Create sample equipment data
+            List<Equipment> equipmentList = Arrays.asList(
+                Equipment.builder()
+                    .name("Street Light - Main Street 001")
+                    .type("LIGHTING")
+                    .location(new Location(36.8065, 10.1815, "Main Street Downtown"))
+                    .lastMaintenance(new Date())
+                    .status("Active")
+                    .build(),
+                    
+                Equipment.builder()
+                    .name("Traffic Light - School Crossing")
+                    .type("TRAFFIC")
+                    .location(new Location(36.8080, 10.1830, "School Zone"))
+                    .lastMaintenance(new Date())
+                    .status("Active")
+                    .build(),
+                    
+                Equipment.builder()
+                    .name("Water Pump Station A")
+                    .type("WATER")
+                    .location(new Location(36.8050, 10.1790, "Industrial Area"))
+                    .lastMaintenance(new Date())
+                    .status("Maintenance")
+                    .build(),
+                    
+                Equipment.builder()
+                    .name("Road Sensor - Highway 101")
+                    .type("ROAD")
+                    .location(new Location(36.8100, 10.1850, "Highway 101"))
+                    .lastMaintenance(new Date())
+                    .status("Active")
+                    .build()
+            );
+            
+            // Save all equipment to database
+            equipmentRepository.saveAll(equipmentList);
+            
+            return "<pre>✅ Equipment initialized successfully!\n" +
+                   "Created " + equipmentList.size() + " equipment items.\n" +
+                   "Check MongoDB Compass - 'equipments' collection should now exist.</pre>";
+                   
+        } catch (Exception e) {
+            return "<pre>❌ Failed to initialize equipment: " + e.getMessage() + "</pre>";
+        }
     }
 }
