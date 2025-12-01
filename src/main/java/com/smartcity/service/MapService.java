@@ -107,7 +107,7 @@ public class MapService {
                 .id(equipment.getId())
                 .type("equipment")
                 .label(equipment.getName())
-                .status(equipment.getStatus())
+                .status(equipment.getStatus().toString())
                 .latitude(equipment.getLocation().getLatitude())
                 .longitude(equipment.getLocation().getLongitude())
                 .build();

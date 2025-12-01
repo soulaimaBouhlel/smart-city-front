@@ -1,24 +1,23 @@
 package com.smartcity.repository;
 
 import com.smartcity.model.Equipment;
+import com.smartcity.model.Status;
+import com.smartcity.model.EquipmentType;
 import org.springframework.data.mongodb.repository.MongoRepository;
-import org.springframework.stereotype.Repository;
-
 import java.util.List;
 
-/**
- * Repository for Equipment entities.
- */
-@Repository
+// Extends MongoRepository to get basic CRUD operations
 public interface EquipmentRepository extends MongoRepository<Equipment, String> {
 
     /**
-     * Find equipment by type
+     * Finds a list of Equipment entities filtered by their Status.
+     * Uses the Status enum for type safety.
      */
-    List<Equipment> findByType(String type);
+    List<Equipment> findByStatus(Status status);
 
     /**
-     * Find equipment by status
+     * Finds a list of Equipment entities filtered by their EquipmentType.
+     * Uses the EquipmentType enum for type safety.
      */
-    List<Equipment> findByStatus(String status);
+    List<Equipment> findByType(EquipmentType type);
 }

@@ -23,8 +23,7 @@ public class Location {
 
     /**
      * Calculate distance to another location using Haversine formula.
-     * 
-     * @param other the other location
+     * * @param other the other location
      * @return distance in meters
      */
     public double distanceTo(Location other) {
