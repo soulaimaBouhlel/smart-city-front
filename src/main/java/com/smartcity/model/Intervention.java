@@ -26,7 +26,7 @@ public class Intervention {
 
     private String description;
 
-    private String interventionType; // e.g., "Road Repair", "Equipment Maintenance", "Emergency"
+    private String interventionType; 
 
     private Priority priority;
 

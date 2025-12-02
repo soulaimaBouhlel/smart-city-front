@@ -1,10 +1,12 @@
 package com.smartcity.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import com.smartcity.service.SmartSchedulerService;
-import com.smartcity.repository.EquipmentRepository;
+import com.smartcity.service.GeminiAIService;
 import com.smartcity.repository.InterventionRepository;
+import com.smartcity.repository.TechnicianRepository;
 import com.smartcity.model.*;
 import java.util.*;
 
@@ -16,221 +18,236 @@ public class SchedulerController {
     private SmartSchedulerService smartSchedulerService;
     
     @Autowired
+    private GeminiAIService geminiAIService;
+    
+    @Autowired
     private InterventionRepository interventionRepository;
     
     @Autowired
-    private EquipmentRepository equipmentRepository; 
-    
-    @GetMapping("/test")
-    public String testScheduler() {
-        return "<h1>🚀 Smart Scheduler API</h1>" +
-               "<p>Available endpoints:</p>" +
-               "<ul>" +
-               "<li><a href='/api/scheduler/test-urgency'>/api/scheduler/test-urgency</a> - Test urgency analysis</li>" +
-               "<li><a href='/api/scheduler/test-assignment'>/api/scheduler/test-assignment</a> - Test technician assignment</li>" +
-               "<li><a href='/api/scheduler/analyze?description=problem'>/api/scheduler/analyze?description=PROBLEM</a> - Analyze specific problem</li>" +
-               "<li><a href='/api/scheduler/init-equipment'>/api/scheduler/init-equipment</a> - Initialize Equipment Data</li>" + // ADDED THIS LINE
-               "</ul>";
-    }
-    
-    @GetMapping("/test-urgency")
-    public String testUrgencyAnalysis() {
-        StringBuilder result = new StringBuilder();
-        result.append("<pre style='font-family: Arial; font-size: 14px; line-height: 1.5;'>");
-        result.append("🤖 SMART URGENCY ANALYSIS TEST\n\n");
-        
-        String[] testCases = {
-            "CAR ACCIDENT WITH FIRE - PEOPLE TRAPPED - EMERGENCY!!!",
-            "Broken traffic light at school crossing, children at risk",
-            "Water pipe burst flooding main street URGENT",
-            "Park bench needs painting next week",
-            "Routine street light maintenance",
-            "Gas leak detected, evacuation needed IMMEDIATELY",
-            "Nice weather today, everything working fine"
-        };
-        
-        for (int i = 0; i < testCases.length; i++) {
-            String problem = testCases[i];
-            int urgency = smartSchedulerService.analyzeUrgency(problem);
+    private TechnicianRepository technicianRepository;
+
+    /**
+     * Assign technician to REAL intervention (uses AI for matching)
+     * PRODUCTION ENDPOINT - uses real database only
+     */
+    @PostMapping("/assign-technician")
+    public ResponseEntity<Map<String, Object>> assignTechnician(@RequestParam String interventionId) {
+        try {
+            Optional<Intervention> interventionOpt = interventionRepository.findById(interventionId);
             
-            result.append(String.format(
-                "=== TEST %d ===\n" +
-                "Problem: %s\n" +
-                "Urgency Score: %d/10\n" +
-                "Status: ✅ SMART ANALYSIS\n\n",
-                i + 1, problem, urgency
+            if (interventionOpt.isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "error", "Intervention not found",
+                    "interventionId", interventionId
+                ));
+            }
+            
+            Intervention intervention = interventionOpt.get();
+            System.out.println("Processing Intervention: " + intervention.getTitle());
+            
+            // Use AI to find best technician from REAL database
+            Technician bestTechnician = smartSchedulerService.findBestTechnician(intervention);
+            
+            if (bestTechnician == null) {
+                return ResponseEntity.ok(Map.of(
+                    "message", "No available technicians found",
+                    "interventionId", interventionId,
+                    "assigned", false
+                ));
+            }
+            
+            // Update REAL technician workload in database
+            bestTechnician.increaseWorkload();
+            technicianRepository.save(bestTechnician);
+            
+            // Update REAL intervention status in database
+            intervention.setStatus(Intervention.Status.IN_PROGRESS);
+            interventionRepository.save(intervention);
+            
+            return ResponseEntity.ok(Map.of(
+                "message", "Technician assigned successfully",
+                "interventionId", interventionId,
+                "technicianId", bestTechnician.getTechnicianId(),
+                "technicianName", bestTechnician.getName(),
+                "technicianSkills", bestTechnician.getSkills(),
+                "assigned", true
+            ));
+            
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of(
+                "error", "Failed to assign technician",
+                "details", e.getMessage()
             ));
         }
-        
-        result.append("</pre>");
-        return result.toString();
     }
-    
-    @GetMapping("/test-assignment")
-    public String testTechnicianAssignment() {
-        StringBuilder result = new StringBuilder();
-        result.append("<pre style='font-family: Arial; font-size: 14px; line-height: 1.5;'>");
-        result.append("👨‍🔧 SMART TECHNICIAN ASSIGNMENT TEST\n\n");
-        
-        // Create mock interventions using the Builder pattern
-        List<Intervention> testInterventions = Arrays.asList(
-            Intervention.builder()
-                .title("Street Light Repair")
-                .description("Broken street light on Main St")
-                .interventionType("STREET_LIGHT")
-                .priority(Intervention.Priority.HIGH)
-                .location(new Location())
-                .build(),
+
+    /**
+     * AI processes REAL intervention with full analysis and assignment
+     * PRODUCTION ENDPOINT - uses real database only
+     */
+    @PostMapping("/ai-process-real-intervention")
+    public ResponseEntity<Map<String, Object>> aiProcessRealIntervention(@RequestParam String interventionId) {
+        try {
+            // 1. GET REAL INTERVENTION FROM DATABASE
+            Optional<Intervention> interventionOpt = interventionRepository.findById(interventionId);
+            
+            if (interventionOpt.isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "error", "Intervention not found in database",
+                    "interventionId", interventionId
+                ));
+            }
+            
+            Intervention intervention = interventionOpt.get();
+            System.out.println("AI Processing Intervention: " + intervention.getTitle());
+            
+            // 2. GET COMPLETE AI ANALYSIS (priority, urgency, skills)
+            GeminiAIService.InterventionAnalysis analysis = 
+                smartSchedulerService.analyzeIntervention(
+                    intervention.getDescription(), 
+                    intervention.getInterventionType()
+                );
+            
+            // 3. AI FINDS BEST TECHNICIAN FROM REAL DATABASE
+            Technician bestTechnician = smartSchedulerService.findBestTechnician(intervention);
+            
+            // Use HashMap for production safety
+            Map<String, Object> result = new HashMap<>();
+            result.put("interventionId", interventionId);
+            result.put("realDescription", intervention.getDescription());
+            result.put("aiPriority", analysis.getPriority());
+            result.put("aiUrgencyScore", analysis.getUrgency());
+            result.put("aiRecommendedSkills", analysis.getSkills());
+            
+            if (bestTechnician != null) {
+                // 4. UPDATE REAL DATABASE
+                bestTechnician.increaseWorkload();
+                technicianRepository.save(bestTechnician);
                 
-            Intervention.builder()
-                .title("Water Pipe Burst")
-                .description("Water pipe burst flooding street")
-                .interventionType("WATER_LEAK")
-                .priority(Intervention.Priority.CRITICAL)
-                .location(new Location())
-                .build(),
+                intervention.setStatus(Intervention.Status.IN_PROGRESS);
+                intervention.setPriority(smartSchedulerService.mapPriority(analysis.getPriority()));
+                intervention.setPriorityScore(analysis.getUrgency());
+                interventionRepository.save(intervention);
                 
-            Intervention.builder()
-                .title("Road Repair")
-                .description("Pothole on highway needs repair")
-                .interventionType("ROAD_REPAIR")
-                .priority(Intervention.Priority.MEDIUM)
-                .location(new Location())
-                .build()
-        );
-        
-        // Get mock technicians
-        List<Technician> technicians = smartSchedulerService.createMockTechnicians();
-        
-        for (int i = 0; i < testInterventions.size(); i++) {
-            Intervention intervention = testInterventions.get(i);
+                result.put("assigned", true);
+                result.put("technicianId", bestTechnician.getTechnicianId());
+                result.put("technicianName", bestTechnician.getName());
+                result.put("technicianSkills", bestTechnician.getSkills());
+                result.put("technicianWorkload", bestTechnician.getCurrentWorkload());
+                result.put("message", "AI successfully processed intervention and assigned technician");
+            } else {
+                result.put("assigned", false);
+                result.put("message", "AI processed intervention but no technicians available");
+            }
             
-            // ✅ SAVE TO DATABASE
-            Intervention savedIntervention = interventionRepository.save(intervention);
+            return ResponseEntity.ok(result);
             
-            String bestTech = smartSchedulerService.findBestTechnician(intervention, technicians);
-            
-            result.append(String.format(
-                "=== INTERVENTION %d ===\n" +
-                "Title: %s\n" +
-                "Type: %s\n" +
-                "Best Technician: %s\n" +
-                "Saved to DB with ID: %s\n\n",
-                i + 1, intervention.getTitle(), intervention.getInterventionType(), 
-                bestTech, savedIntervention.getInterventionId()
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body(Map.of(
+                "error", "AI processing failed",
+                "details", e.getMessage()
             ));
         }
-        
-        result.append("</pre>");
-        return result.toString();
     }
-    
-    @GetMapping("/analyze")
-    public String analyzeProblem(@RequestParam String description) {
+
+    /**
+     * Get complete AI analysis for intervention
+     * PRODUCTION ENDPOINT - uses real database only
+     */
+    @GetMapping("/analyze-intervention")
+    public ResponseEntity<Map<String, Object>> analyzeIntervention(@RequestParam String interventionId) {
         try {
-            int urgency = smartSchedulerService.analyzeUrgency(description);
+            // Get REAL intervention from database
+            Optional<Intervention> interventionOpt = interventionRepository.findById(interventionId);
             
-            // Create a mock intervention using Builder pattern
-            Intervention intervention = Intervention.builder()
-                .title("Auto-generated from description")
-                .description(description)
-                .interventionType(determineInterventionType(description))
-                .priority(mapUrgencyToPriority(urgency))
-                .location(new Location())
-                .priorityScore(urgency)
-                .build();
+            if (interventionOpt.isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "error", "Intervention not found",
+                    "interventionId", interventionId
+                ));
+            }
             
-            // ✅ SAVE TO DATABASE
-            Intervention savedIntervention = interventionRepository.save(intervention);
+            Intervention intervention = interventionOpt.get();
             
-            List<Technician> technicians = smartSchedulerService.createMockTechnicians();
-            String bestTech = smartSchedulerService.findBestTechnician(intervention, technicians);
+            // Get complete AI analysis
+            GeminiAIService.InterventionAnalysis analysis = 
+                smartSchedulerService.analyzeIntervention(
+                    intervention.getDescription(), 
+                    intervention.getInterventionType()
+                );
             
-            return String.format("<pre>"
-                + "🔍 SMART ANALYSIS RESULTS\n"
-                + "Problem: %s\n"
-                + "Detected Type: %s\n"
-                + "Urgency Score: %d/10\n"
-                + "Priority: %s\n"
-                + "Recommended Technician: %s\n"
-                + "Saved to DB with ID: %s\n"
-                + "Status: ✅ ANALYSIS COMPLETE"
-                + "</pre>", description, intervention.getInterventionType(), urgency, 
-                intervention.getPriority(), bestTech, savedIntervention.getInterventionId());
-                
+            // Use HashMap for production safety
+            Map<String, Object> response = new HashMap<>();
+            response.put("interventionId", interventionId);
+            response.put("title", intervention.getTitle());
+            response.put("description", intervention.getDescription());
+            response.put("type", intervention.getInterventionType());
+            response.put("aiPriority", analysis.getPriority());
+            response.put("aiUrgencyScore", analysis.getUrgency());
+            response.put("aiRecommendedSkills", analysis.getSkills());
+            response.put("mappedPriority", smartSchedulerService.mapPriority(analysis.getPriority()));
+            
+            return ResponseEntity.ok(response);
+            
         } catch (Exception e) {
-            return String.format("<pre>"
-                + "❌ ANALYSIS FAILED\n"
-                + "Problem: %s\n"
-                + "Error: %s\n"
-                + "</pre>", description, e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.badRequest().body(Map.of(
+                "error", "Failed to analyze intervention",
+                "details", e.getMessage()
+            ));
         }
     }
-    
-    private String determineInterventionType(String description) {
-        String lowerDesc = description.toLowerCase();
-        if (lowerDesc.contains("light") || lowerDesc.contains("electric")) return "STREET_LIGHT";
-        if (lowerDesc.contains("traffic")) return "TRAFFIC_LIGHT";
-        if (lowerDesc.contains("water") || lowerDesc.contains("pipe") || lowerDesc.contains("leak")) return "WATER_LEAK";
-        if (lowerDesc.contains("road") || lowerDesc.contains("street") || lowerDesc.contains("pavement")) return "ROAD_REPAIR";
-        if (lowerDesc.contains("waste") || lowerDesc.contains("garbage")) return "WASTE_ISSUE";
-        return "STREET_LIGHT"; // default
-    }
-    
-    private Intervention.Priority mapUrgencyToPriority(int urgency) {
-        if (urgency >= 9) return Intervention.Priority.CRITICAL;
-        if (urgency >= 7) return Intervention.Priority.HIGH;
-        if (urgency >= 5) return Intervention.Priority.MEDIUM;
-        return Intervention.Priority.LOW;
-    }
-    
-    @GetMapping("/init-equipment")
-    public String initializeEquipment() {
+
+    /**
+     * View REAL data in database (for debugging only - can be removed in production)
+     */
+    @GetMapping("/real-data")
+    public ResponseEntity<Map<String, Object>> viewRealData() {
         try {
-            // Create sample equipment data
-            List<Equipment> equipmentList = Arrays.asList(
-                Equipment.builder()
-                    .name("Street Light - Main Street 001")
-                    .type("LIGHTING")
-                    .location(new Location(36.8065, 10.1815, "Main Street Downtown"))
-                    .lastMaintenance(new Date())
-                    .status("Active")
-                    .build(),
-                    
-                Equipment.builder()
-                    .name("Traffic Light - School Crossing")
-                    .type("TRAFFIC")
-                    .location(new Location(36.8080, 10.1830, "School Zone"))
-                    .lastMaintenance(new Date())
-                    .status("Active")
-                    .build(),
-                    
-                Equipment.builder()
-                    .name("Water Pump Station A")
-                    .type("WATER")
-                    .location(new Location(36.8050, 10.1790, "Industrial Area"))
-                    .lastMaintenance(new Date())
-                    .status("Maintenance")
-                    .build(),
-                    
-                Equipment.builder()
-                    .name("Road Sensor - Highway 101")
-                    .type("ROAD")
-                    .location(new Location(36.8100, 10.1850, "Highway 101"))
-                    .lastMaintenance(new Date())
-                    .status("Active")
-                    .build()
-            );
+            // Get REAL interventions from database
+            List<Intervention> interventions = interventionRepository.findAll();
+            List<Technician> technicians = technicianRepository.findAll();
             
-            // Save all equipment to database
-            equipmentRepository.saveAll(equipmentList);
+            // Show what we have to work with - use HashMap for safety
+            List<Map<String, Object>> interventionList = new ArrayList<>();
+            for (Intervention intervention : interventions) {
+                Map<String, Object> interventionMap = new HashMap<>();
+                interventionMap.put("id", intervention.getInterventionId());
+                interventionMap.put("title", intervention.getTitle() != null ? intervention.getTitle() : "No Title");
+                interventionMap.put("description", intervention.getDescription() != null ? intervention.getDescription() : "No Description");
+                interventionMap.put("type", intervention.getInterventionType() != null ? intervention.getInterventionType() : "UNKNOWN");
+                interventionMap.put("status", intervention.getStatus() != null ? intervention.getStatus() : "UNKNOWN");
+                interventionMap.put("priority", intervention.getPriority() != null ? intervention.getPriority() : "UNKNOWN");
+                interventionList.add(interventionMap);
+            }
             
-            return "<pre>✅ Equipment initialized successfully!\n" +
-                   "Created " + equipmentList.size() + " equipment items.\n" +
-                   "Check MongoDB Compass - 'equipments' collection should now exist.</pre>";
-                   
+            List<Map<String, Object>> technicianList = new ArrayList<>();
+            for (Technician tech : technicians) {
+                Map<String, Object> technicianMap = new HashMap<>();
+                technicianMap.put("id", tech.getTechnicianId());
+                technicianMap.put("name", tech.getName() != null ? tech.getName() : "Unknown");
+                technicianMap.put("skills", tech.getSkills() != null ? tech.getSkills() : Collections.emptySet());
+                technicianMap.put("available", tech.isAvailable());
+                technicianMap.put("workload", tech.getCurrentWorkload() != null ? tech.getCurrentWorkload() : 0);
+                technicianList.add(technicianMap);
+            }
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("interventions", interventionList);
+            response.put("technicians", technicianList);
+            response.put("total_interventions", interventions.size());
+            response.put("total_technicians", technicians.size());
+            response.put("available_technicians", technicians.stream().filter(Technician::isAvailable).count());
+            
+            return ResponseEntity.ok(response);
+            
         } catch (Exception e) {
-            return "<pre>❌ Failed to initialize equipment: " + e.getMessage() + "</pre>";
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body(Map.of(
+                "error", "Failed to get real data",
+                "details", e.getMessage()
+            ));
         }
     }
 }

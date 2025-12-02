@@ -1,6 +1,7 @@
 package com.smartcity.service;
 
 import com.smartcity.model.*;
+import com.smartcity.repository.TechnicianRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import java.util.List;
@@ -11,30 +12,34 @@ public class InterventionService {
 
     private final INotificationService notificationService;
     private final SmartSchedulerService smartSchedulerService;
+    private final TechnicianRepository technicianRepository;
 
     public Intervention createIntervention(String citizenId, String description, String interventionType, Location location) {
-        // Use SmartScheduler to calculate urgency
-        int urgencyScore = smartSchedulerService.analyzeUrgency(description);
+        // Get complete AI analysis
+        GeminiAIService.InterventionAnalysis analysis = 
+            smartSchedulerService.analyzeIntervention(description, interventionType);
         
-        // Create intervention with smart priority
+        // Create intervention with AI-determined priority
         Intervention intervention = Intervention.builder()
                 .title("Intervention - " + interventionType)
                 .description(description)
                 .interventionType(interventionType)
                 .location(location)
-                .priorityScore(urgencyScore)
-                .priority(mapUrgencyToPriority(urgencyScore))
+                .priorityScore(analysis.getUrgency())
+                .priority(smartSchedulerService.mapPriority(analysis.getPriority()))
+                .status(Intervention.Status.PENDING)
                 .build();
         
-        // Find best technician automatically
-        List<Technician> availableTechs = smartSchedulerService.createMockTechnicians();
-        String bestTech = smartSchedulerService.findBestTechnician(intervention, availableTechs);
+        // Find best technician using AI
+        Technician bestTechnician = smartSchedulerService.findBestTechnician(intervention);
+        String technicianInfo = bestTechnician != null ? bestTechnician.getName() : "No available technicians";
         
-        // Send notification with smart details
+        // Send notification with AI analysis
         Notification notification = Notification.builder()
                 .id(java.util.UUID.randomUUID().toString())
-                .title("Intervention Created")
-                .message("Intervention created with urgency " + urgencyScore + "/10. Best technician: " + bestTech)
+                .title("Intervention Created - " + analysis.getPriority())
+                .message("AI analysis: " + analysis.getPriority() + " priority, " + 
+                         analysis.getUrgency() + "/10 urgency. Best match: " + technicianInfo)
                 .type(Notification.NotificationType.SYSTEM)
                 .recipientId(citizenId)
                 .timestamp(java.time.LocalDateTime.now())
@@ -44,15 +49,8 @@ public class InterventionService {
         return intervention;
     }
 
-    private Intervention.Priority mapUrgencyToPriority(int urgency) {
-        if (urgency >= 9) return Intervention.Priority.CRITICAL;
-        if (urgency >= 7) return Intervention.Priority.HIGH;
-        if (urgency >= 5) return Intervention.Priority.MEDIUM;
-        return Intervention.Priority.LOW;
-    }
-
     public void assignTechnician(String interventionId, String technicianId) {
-        // Logic to assign technician...
+        // Manual assignment logic would go here
         Notification notification = Notification.builder()
                 .id(java.util.UUID.randomUUID().toString())
                 .title("Technician Assigned")
@@ -65,7 +63,7 @@ public class InterventionService {
     }
 
     public void updateStatus(String interventionId, String status, String citizenId) {
-        // Logic to update status...
+        // Status update logic would go here
         Notification notification = Notification.builder()
                 .id(java.util.UUID.randomUUID().toString())
                 .title("Intervention Status Update")
