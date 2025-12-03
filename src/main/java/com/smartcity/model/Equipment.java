@@ -3,17 +3,19 @@ package com.smartcity.model;
 import com.smartcity.model.EquipmentType;
 import com.smartcity.model.Status;
 import lombok.AllArgsConstructor;
-import lombok.Builder; // 🛑 REQUIRED IMPORT
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.geo.GeoJsonPoint;
+import org.springframework.data.mongodb.core.index.GeoSpatialIndexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 import java.util.Date;
 
 // Maps to the Equipment class in the UML diagram
-@Document(collection = "equipment")
+@Document(collection = "equipments")
 @Data
-@Builder // 🛑 Annotation added to support .builder() calls in controllers
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class Equipment {
@@ -21,18 +23,21 @@ public class Equipment {
     // int equipmentId is the logical ID, but MongoDB uses String _id
     @Id
     private String id;
-    
+
     private String name;
-    
+
     // EquipmentType is an EEquipmentType in the UML diagram
-    private EquipmentType type; 
-    
-    // Location is embedded in the document
-    private Location location;
-    
+    private EquipmentType type;
+
+    // GeoJSON Point for geospatial queries
+    @GeoSpatialIndexed
+    private GeoJsonPoint location;
+
+    private String address; // Optional address field
+
     // Status is an EStatus in the UML diagram
     private Status status;
-    
+
     private Date lastMaintenance;
 
     // -------------------------------------------------------------------------
@@ -43,18 +48,20 @@ public class Equipment {
         private String id;
         private String name;
         // Use the final enum types for the actual fields
-        private EquipmentType type; 
-        private Location location;
+        private EquipmentType type;
+        private GeoJsonPoint location;
+        private String address;
         private Status status;
         private Date lastMaintenance;
 
-        // Custom builder method for 'type' to accept String input (e.g., "Street Light")
+        // Custom builder method for 'type' to accept String input (e.g., "Street
+        // Light")
         public EquipmentBuilder type(String type) {
             // Map the controller strings to the internal EquipmentType enum
             String normalizedType = switch (type.toLowerCase()) {
                 case "street light", "lighting" -> "LIGHTING";
                 case "traffic signal", "traffic" -> "TRAFFIC";
-                case "sensor", "road" -> "ROAD"; 
+                case "sensor", "road" -> "ROAD";
                 case "water pump station a", "water" -> "WATER";
                 default -> "LIGHTING"; // Default to a safe type
             };
@@ -67,9 +74,9 @@ public class Equipment {
             // Map the controller strings to the internal Status enum
             String normalizedStatus = switch (status.toLowerCase()) {
                 // "Active" is mapped to "COMPLETED" (no intervention needed)
-                case "active", "completed" -> "COMPLETED"; 
+                case "active", "completed" -> "COMPLETED";
                 // "Maintenance" and "Faulty" are mapped to "PENDING" (needs intervention)
-                case "maintenance", "faulty", "pending" -> "PENDING"; 
+                case "maintenance", "faulty", "pending" -> "PENDING";
                 default -> "PENDING";
             };
             this.status = Status.valueOf(normalizedStatus);
@@ -78,19 +85,21 @@ public class Equipment {
 
         // Must manually include the build method when defining custom methods
         public Equipment build() {
-            return new Equipment(id, name, type, location, status, lastMaintenance);
+            return new Equipment(id, name, type, location, address, status, lastMaintenance);
         }
     }
-    
+
     // -------------------------------------------------------------------------
     // 🛑 END CUSTOM BUILDER
     // -------------------------------------------------------------------------
 
     // Based on the UML: o_needsMaintenance()
     public boolean needsMaintenance() {
-        // Simple logic: Needs maintenance if last maintenance was more than 30 days ago.
+        // Simple logic: Needs maintenance if last maintenance was more than 30 days
+        // ago.
         long thirtyDaysInMillis = 30L * 24 * 60 * 60 * 1000;
-        if (this.lastMaintenance == null) return true; // Assume if null, it needs maintenance
+        if (this.lastMaintenance == null)
+            return true; // Assume if null, it needs maintenance
         return (new Date().getTime() - this.lastMaintenance.getTime()) > thirtyDaysInMillis;
     }
 }

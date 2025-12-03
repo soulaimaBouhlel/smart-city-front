@@ -1,6 +1,6 @@
 package com.smartcity.service;
 
-import com.smartcity.model.Location;
+import com.smartcity.dto.OsrmRouteResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -31,71 +31,60 @@ public class OsrmService {
     }
 
     /**
-     * Get road-based distance between two locations using OSRM.
+     * Get route between two points.
      * 
-     * @param from starting location
-     * @param to   destination location
-     * @return distance in meters, or null if route cannot be calculated
+     * @param fromLng starting longitude
+     * @param fromLat starting latitude
+     * @param toLng   destination longitude
+     * @param toLat   destination latitude
+     * @return OsrmRouteResponse with route details
      */
-    public Double getDistance(Location from, Location to) {
-        if (!validateCoordinates(from.getLatitude(), from.getLongitude()) ||
-                !validateCoordinates(to.getLatitude(), to.getLongitude())) {
+    public OsrmRouteResponse getRoute(double fromLng, double fromLat, double toLng, double toLat) {
+        if (!validateCoordinates(fromLat, fromLng) || !validateCoordinates(toLat, toLng)) {
             log.error("Invalid coordinates provided");
-            return null;
+            return OsrmRouteResponse.builder()
+                    .code("InvalidCoordinates")
+                    .build();
         }
 
         try {
-            String url = buildRouteUrl(from, to);
+            String url = buildRouteUrl(fromLng, fromLat, toLng, toLat);
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
 
             if (response != null && "Ok".equals(response.get("code"))) {
                 Map<String, Object>[] routes = (Map<String, Object>[]) response.get("routes");
                 if (routes != null && routes.length > 0) {
                     Number distance = (Number) routes[0].get("distance");
-                    return distance != null ? distance.doubleValue() : null;
+                    Number duration = (Number) routes[0].get("duration");
+
+                    return OsrmRouteResponse.builder()
+                            .code("Ok")
+                            .distance(distance != null ? distance.doubleValue() : null)
+                            .duration(duration != null ? duration.doubleValue() : null)
+                            .build();
                 }
             }
 
             log.warn("No route found between locations");
-            return null;
+            return OsrmRouteResponse.builder()
+                    .code("NoRoute")
+                    .build();
 
         } catch (RestClientException e) {
             log.error("Error calling OSRM API: {}", e.getMessage());
-            // Fallback to straight-line distance
-            return from.distanceTo(to);
+            return OsrmRouteResponse.builder()
+                    .code("Error")
+                    .build();
         }
     }
 
     /**
-     * Get full route information between two locations.
-     * 
-     * @param from starting location
-     * @param to   destination location
-     * @return route response map, or null if error
+     * Build OSRM route URL from coordinates.
      */
-    public Map<String, Object> getRoute(Location from, Location to) {
-        if (!validateCoordinates(from.getLatitude(), from.getLongitude()) ||
-                !validateCoordinates(to.getLatitude(), to.getLongitude())) {
-            log.error("Invalid coordinates provided");
-            return null;
-        }
-
-        try {
-            String url = buildRouteUrl(from, to);
-            return restTemplate.getForObject(url, Map.class);
-        } catch (RestClientException e) {
-            log.error("Error calling OSRM API: {}", e.getMessage());
-            return null;
-        }
-    }
-
-    /**
-     * Build OSRM route URL from two locations.
-     */
-    private String buildRouteUrl(Location from, Location to) {
+    private String buildRouteUrl(double fromLng, double fromLat, double toLng, double toLat) {
         return String.format("%s%f,%f;%f,%f?overview=false",
                 OSRM_BASE_URL,
-                from.getLongitude(), from.getLatitude(),
-                to.getLongitude(), to.getLatitude());
+                fromLng, fromLat,
+                toLng, toLat);
     }
 }
