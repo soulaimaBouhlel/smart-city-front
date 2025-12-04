@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.geo.GeoJsonPoint;
+import org.springframework.data.mongodb.core.index.GeoSpatialIndexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
@@ -33,7 +35,11 @@ public class Intervention {
     @Builder.Default
     private Status status = Status.PENDING;
 
-    private Location location;
+    // GeoJSON Point for geospatial queries
+    @GeoSpatialIndexed
+    private GeoJsonPoint location;
+    
+    private String address; // Optional address field
 
     @Builder.Default
     private LocalDateTime createdDate = LocalDateTime.now();
@@ -43,6 +49,10 @@ public class Intervention {
     private Integer priorityScore; // Calculated score for sorting
 
     private String photoUrl;
+    
+    // Equipment and Technician references
+    private String equipmentId;
+    private String assignedTechnicianId;
 
     public enum Priority {
         LOW, MEDIUM, HIGH, CRITICAL
@@ -61,7 +71,7 @@ public class Intervention {
         return this.interventionType;
     }
 
-    public Location getLocation() {
+    public GeoJsonPoint getLocation() {
         return this.location;
     }
 }

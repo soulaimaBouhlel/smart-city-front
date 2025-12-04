@@ -26,4 +26,19 @@ public interface InterventionRepository extends MongoRepository<Intervention, St
      * Find interventions by type
      */
     List<Intervention> findByInterventionType(String interventionType);
+
+    /**
+     * Find interventions by equipment ID
+     */
+    List<Intervention> findByEquipmentId(String equipmentId);
+
+    /**
+     * Find interventions by assigned technician ID
+     */
+    List<Intervention> findByAssignedTechnicianId(String technicianId);
+
+    /**
+     * Find unassigned interventions (no technician assigned yet)
+     */
+    List<Intervention> findByAssignedTechnicianIdIsNull();
 }

@@ -1,9 +1,9 @@
 package com.smartcity.controller;
 
 import com.smartcity.model.Intervention;
-import com.smartcity.model.Location;
 import com.smartcity.service.CitizenService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.mongodb.core.geo.GeoJsonPoint;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -13,7 +13,7 @@ import java.util.Map;
 @RequestMapping("/api/citizens")
 @CrossOrigin(origins = "*")
 public class CitizenController {
-    
+
     @Autowired
     private CitizenService citizenService;
 
@@ -22,9 +22,13 @@ public class CitizenController {
             @RequestParam String citizenId,
             @RequestParam String description,
             @RequestParam String interventionType,
-            @RequestBody Location location) {
-        
-        Intervention intervention = citizenService.submitIssue(citizenId, description, interventionType, location);
+            @RequestParam double longitude,
+            @RequestParam double latitude,
+            @RequestParam(required = false) String address) {
+
+        GeoJsonPoint location = new GeoJsonPoint(longitude, latitude);
+        Intervention intervention = citizenService.submitIssue(citizenId, description, interventionType, location,
+                address);
         return ResponseEntity.ok(intervention);
     }
 
