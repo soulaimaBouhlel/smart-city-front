@@ -31,6 +31,8 @@ public class Intervention {
 
     private String address;
 
+    private GeoJsonPoint location;
+
     @Builder.Default
     private LocalDateTime createdDate = LocalDateTime.now();
 
@@ -46,6 +48,15 @@ public class Intervention {
 
     // The ID of the citizen who reported this intervention
     private String citizenId;
+
+    // Enums for Controller usage
+    public enum Status {
+        PENDING, IN_PROGRESS, COMPLETED, CANCELLED
+    }
+
+    public enum Priority {
+        CRITICAL, HIGH, MEDIUM, LOW
+    }
 
     // -----------------------------------------------------------------
     // SIMPLE BUILDER CUSTOMIZATION
