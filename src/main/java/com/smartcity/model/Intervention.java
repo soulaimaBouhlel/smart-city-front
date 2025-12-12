@@ -6,72 +6,61 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.geo.GeoJsonPoint;
-import org.springframework.data.mongodb.core.index.GeoSpatialIndexed;
 import org.springframework.data.mongodb.core.mapping.Document;
-
+import org.springframework.data.mongodb.core.mapping.DBRef;
 import java.time.LocalDateTime;
 
-/**
- * Intervention entity representing city maintenance or repair interventions.
- */
+@Document(collection = "interventions")
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Document(collection = "interventions")
 public class Intervention {
-
+    
     @Id
     private String interventionId;
-
-    private String title;
-
-    private String description;
-
-    private String interventionType; 
-
-    private Priority priority;
-
-    @Builder.Default
-    private Status status = Status.PENDING;
-
-    // GeoJSON Point for geospatial queries
-    @GeoSpatialIndexed
-    private GeoJsonPoint location;
     
-    private String address; // Optional address field
-
+    private String title;
+    private String description;
+    private String interventionType;
+    
+    private String priority;
+    
+    @Builder.Default
+    private String status = "PENDING";
+    
+    private String address;
+    
     @Builder.Default
     private LocalDateTime createdDate = LocalDateTime.now();
-
-    private LocalDateTime completedDate;
-
-    private Integer priorityScore; // Calculated score for sorting
-
-    private String photoUrl;
     
-    // Equipment and Technician references
+    private LocalDateTime completedDate;
+    private Integer priorityScore;
+    private String photoUrl;
     private String equipmentId;
+    
+    @DBRef
+    private Equipment equipment;
+    
     private String assignedTechnicianId;
 
-    public enum Priority {
-        LOW, MEDIUM, HIGH, CRITICAL
-    }
-
-    public enum Status {
-        PENDING, IN_PROGRESS, COMPLETED, CANCELLED
-    }
-
-    // MANUALLY ADD ONLY THE GETTERS THAT WERE MISSING (no setters)
-    public String getTitle() {
-        return this.title;
-    }
-
-    public String getInterventionType() {
-        return this.interventionType;
-    }
-
-    public GeoJsonPoint getLocation() {
-        return this.location;
+    // -----------------------------------------------------------------
+    // SIMPLE BUILDER CUSTOMIZATION
+    // -----------------------------------------------------------------
+    
+    public static class InterventionBuilder {
+        // Builder's status field
+        private String status = "PENDING";
+        
+        public InterventionBuilder priority(String priority) {
+            this.priority = priority;
+            return this;
+        }
+        
+        public InterventionBuilder status(String status) {
+            // Assign parameter to builder's field
+            this.status = status;
+            return this;
+        }
     }
 }

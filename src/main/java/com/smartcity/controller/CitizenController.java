@@ -3,7 +3,6 @@ package com.smartcity.controller;
 import com.smartcity.model.Intervention;
 import com.smartcity.service.CitizenService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.mongodb.core.geo.GeoJsonPoint;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,19 +16,45 @@ public class CitizenController {
     @Autowired
     private CitizenService citizenService;
 
-    @PostMapping("/report-issue")
-    public ResponseEntity<Intervention> reportIssue(
+    /**
+     * NEW: Report issue for SPECIFIC EQUIPMENT
+     */
+    @PostMapping("/report-issue-for-equipment")
+    public ResponseEntity<?> reportIssueForEquipment(
             @RequestParam String citizenId,
+            @RequestParam String equipmentId,  // REQUIRED: which equipment is broken
             @RequestParam String description,
-            @RequestParam String interventionType,
-            @RequestParam double longitude,
-            @RequestParam double latitude,
-            @RequestParam(required = false) String address) {
-
-        GeoJsonPoint location = new GeoJsonPoint(longitude, latitude);
-        Intervention intervention = citizenService.submitIssue(citizenId, description, interventionType, location,
-                address);
-        return ResponseEntity.ok(intervention);
+            @RequestParam String interventionType) {
+        
+        try {
+            Intervention intervention = citizenService.submitIssueForEquipment(
+                citizenId, equipmentId, description, interventionType);
+            
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Issue reported successfully",
+                "intervention", intervention
+            ));
+            
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "error", e.getMessage()
+            ));
+        }
+    }
+    
+    /**
+     * KEEP for backward compatibility but update to use equipment
+     */
+    @PostMapping("/report-issue")
+    public ResponseEntity<?> reportIssue(
+            @RequestParam String citizenId,
+            @RequestParam String equipmentId,  // ADD THIS PARAMETER
+            @RequestParam String description,
+            @RequestParam String interventionType) {
+        
+        return reportIssueForEquipment(citizenId, equipmentId, description, interventionType);
     }
 
     @GetMapping("/test")

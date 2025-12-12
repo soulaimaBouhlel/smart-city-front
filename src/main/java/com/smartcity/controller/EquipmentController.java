@@ -2,13 +2,11 @@ package com.smartcity.controller;
 
 import com.smartcity.model.Equipment;
 import com.smartcity.model.EquipmentType;
-import com.smartcity.model.Status;
 import com.smartcity.service.EquipmentService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
 import java.util.List;
 
 @RestController
@@ -25,7 +23,7 @@ public class EquipmentController {
         return new ResponseEntity<>(createdEquipment, HttpStatus.CREATED);
     }
 
-    // GET: Retrieve all equipment (Similar to InteractiveMap's o_displayMap/List<Equipment>)
+    // GET: Retrieve all equipment
     @GetMapping
     public ResponseEntity<List<Equipment>> getAllEquipment() {
         List<Equipment> equipment = equipmentService.getAllEquipment();
@@ -58,17 +56,31 @@ public class EquipmentController {
         return ResponseEntity.noContent().build();
     }
 
-    // GET: Filter by Status (Similar to InteractiveMap's o_filterByStatus)
+    // GET: Filter by Status (Updated to use String)
     @GetMapping("/filter/status/{status}")
-    public ResponseEntity<List<Equipment>> filterByStatus(@PathVariable Status status) {
+    public ResponseEntity<List<Equipment>> filterByStatus(@PathVariable String status) {
         List<Equipment> equipment = equipmentService.filterByStatus(status);
         return ResponseEntity.ok(equipment);
     }
 
-    // GET: Filter by Type (Similar to InteractiveMap's o_filterByType)
+    // GET: Filter by Type
     @GetMapping("/filter/type/{type}")
     public ResponseEntity<List<Equipment>> filterByType(@PathVariable EquipmentType type) {
         List<Equipment> equipment = equipmentService.filterByType(type);
+        return ResponseEntity.ok(equipment);
+    }
+    
+    // GET: Equipment needing maintenance
+    @GetMapping("/needing-maintenance")
+    public ResponseEntity<List<Equipment>> getEquipmentNeedingMaintenance() {
+        List<Equipment> equipment = equipmentService.getEquipmentNeedingMaintenance();
+        return ResponseEntity.ok(equipment);
+    }
+    
+    // GET: Operational equipment
+    @GetMapping("/operational")
+    public ResponseEntity<List<Equipment>> getOperationalEquipment() {
+        List<Equipment> equipment = equipmentService.getOperationalEquipment();
         return ResponseEntity.ok(equipment);
     }
 }

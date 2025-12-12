@@ -84,6 +84,15 @@ public class SecurityConfig {
                         .requestMatchers("/api/public/**").permitAll()
                         .requestMatchers("/ws/**").permitAll()
                         .requestMatchers("/api/notifications/**").permitAll() // For testing - remove in production
+                        
+                        
+                        // ✅ TEMPORARY: Allow scheduler endpoints for testing
+                        .requestMatchers("/api/scheduler/**").permitAll()
+                        .requestMatchers("/api/interventions/**").permitAll()
+                        .requestMatchers("/api/technicians/**").permitAll()
+                        .requestMatchers("/api/citizen/**").permitAll()
+                        .requestMatchers("/api/equipment/**").permitAll()
+                        .requestMatchers("/api/map/**").permitAll()
 
                         // All other requests require a valid JWT token
                         .anyRequest().authenticated());

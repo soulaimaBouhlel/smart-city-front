@@ -164,6 +164,10 @@ public class Technician {
         if (this.currentWorkload == null)
             this.currentWorkload = 0;
         this.currentWorkload++;
+        
+        if (this.currentWorkload >=5 ) {
+        	this.available = false ; 
+        }
     }
 
     public void decreaseWorkload() {

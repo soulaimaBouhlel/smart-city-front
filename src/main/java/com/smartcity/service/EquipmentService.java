@@ -1,12 +1,10 @@
 package com.smartcity.service;
 
 import com.smartcity.model.Equipment;
-import com.smartcity.model.Status;
 import com.smartcity.model.EquipmentType;
 import com.smartcity.repository.EquipmentRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-
 import java.util.List;
 import java.util.Optional;
 
@@ -38,7 +36,10 @@ public class EquipmentService {
                     equipment.setName(equipmentDetails.getName());
                     equipment.setType(equipmentDetails.getType());
                     equipment.setLocation(equipmentDetails.getLocation());
-                    equipment.setStatus(equipmentDetails.getStatus());
+                    // Use String setter
+                    if (equipmentDetails.getStatus() != null) {
+                        equipment.setStatus(equipmentDetails.getStatus());
+                    }
                     equipment.setLastMaintenance(equipmentDetails.getLastMaintenance());
                     return equipmentRepository.save(equipment);
                 }).orElseThrow(() -> new RuntimeException("Equipment not found with id " + id));
@@ -50,11 +51,29 @@ public class EquipmentService {
     }
 
     // Filtering logic based on InteractiveMap methods
-    public List<Equipment> filterByStatus(Status status) {
+    // UPDATED: Use String parameter instead of Status enum
+    public List<Equipment> filterByStatus(String status) {
         return equipmentRepository.findByStatus(status);
     }
 
     public List<Equipment> filterByType(EquipmentType type) {
         return equipmentRepository.findByType(type);
+    }
+
+    // Additional utility methods
+    public List<Equipment> getEquipmentNeedingMaintenance() {
+        return equipmentRepository.findEquipmentNeedingMaintenance();
+    }
+
+    public List<Equipment> getOperationalEquipment() {
+        return equipmentRepository.findOperationalEquipment();
+    }
+
+    public List<Equipment> searchByName(String name) {
+        // Custom query for name search
+        return equipmentRepository.findAll().stream()
+                .filter(equipment -> equipment.getName() != null && 
+                        equipment.getName().toLowerCase().contains(name.toLowerCase()))
+                .toList();
     }
 }
