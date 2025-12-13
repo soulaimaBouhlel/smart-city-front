@@ -14,15 +14,10 @@ import org.springframework.data.geo.Distance;
 import org.springframework.data.geo.Metrics;
 import org.springframework.data.geo.Point;
 import org.springframework.stereotype.Service;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-/**
- * Simplified MapService for geospatial queries and routing.
- * Clean, focused service with minimal responsibilities.
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -34,37 +29,19 @@ public class MapService {
     private final OsrmService osrmService;
 
     // =========================================================================
-    // Core API Methods (Phase 3 Requirements)
+    // Core API Methods (UNCHANGED)
     // =========================================================================
 
-    /**
-     * Get all equipment.
-     * 
-     * @return list of all equipment
-     */
     public List<Equipment> getAllEquipments() {
         log.info("Retrieving all equipment");
         return equipmentRepository.findAll();
     }
 
-    /**
-     * Get all technicians.
-     * 
-     * @return list of all technicians
-     */
     public List<Technician> getAllTechnicians() {
         log.info("Retrieving all technicians");
         return technicianRepository.findAll();
     }
 
-    /**
-     * Get nearest technicians to a given location within a maximum distance.
-     * 
-     * @param lng           longitude of the center point
-     * @param lat           latitude of the center point
-     * @param maxDistanceKm maximum distance in kilometers
-     * @return list of technicians within the distance, sorted by proximity
-     */
     public List<Technician> getNearestTechnicians(double lng, double lat, double maxDistanceKm) {
         Point location = new Point(lng, lat);
         Distance distance = new Distance(maxDistanceKm, Metrics.KILOMETERS);
@@ -76,26 +53,18 @@ public class MapService {
         return technicians;
     }
 
-    /**
-     * Compute route between two points using OSRM.
-     * 
-     * @param fromLng starting longitude
-     * @param fromLat starting latitude
-     * @param toLng   destination longitude
-     * @param toLat   destination latitude
-     * @return OSRM route response with distance and duration
-     */
+    
     public OsrmRouteResponse computeRoute(double fromLng, double fromLat, double toLng, double toLat) {
         log.info("Computing route from ({}, {}) to ({}, {})", fromLat, fromLng, toLat, toLng);
         return osrmService.getRoute(fromLng, fromLat, toLng, toLat);
     }
 
     // =========================================================================
-    // MapPointDTO Helper Methods (for backward compatibility with MapController)
+    // MapPointDTO Helper Methods
     // =========================================================================
 
     /**
-     * Get all equipment as map points.
+     * Get all equipment as map points
      */
     public List<MapPointDTO> getAllEquipmentPoints() {
         List<Equipment> equipments = equipmentRepository.findAll();
@@ -107,7 +76,7 @@ public class MapService {
     }
 
     /**
-     * Get all interventions as map points.
+     * Get all interventions as map points
      */
     public List<MapPointDTO> getAllInterventionPoints() {
         List<Intervention> interventions = interventionRepository.findAll();
@@ -115,11 +84,12 @@ public class MapService {
 
         return interventions.stream()
                 .map(this::interventionToMapPoint)
+                .filter(dto -> dto != null) // Filter out nulls
                 .collect(Collectors.toList());
     }
 
     /**
-     * Get all map points (equipment + interventions combined).
+     * Get all map points (equipment + interventions combined)
      */
     public List<MapPointDTO> getAllMapPoints() {
         List<MapPointDTO> allPoints = new ArrayList<>();
@@ -131,12 +101,7 @@ public class MapService {
     }
 
     /**
-     * Get nearby points within a radius of given coordinates.
-     * 
-     * @param latitude     center latitude
-     * @param longitude    center longitude
-     * @param radiusMeters search radius in meters
-     * @return list of map points within radius
+     * Get nearby points within a radius of given coordinates
      */
     public List<MapPointDTO> getNearbyPoints(double latitude, double longitude, double radiusMeters) {
         Point location = new Point(longitude, latitude);
@@ -150,19 +115,28 @@ public class MapService {
                 .map(this::equipmentToMapPoint)
                 .collect(Collectors.toList()));
 
-        // Note: Interventions don't have geospatial queries yet, so we filter manually
+        // Find nearby interventions
         List<Intervention> allInterventions = interventionRepository.findAll();
         allInterventions.stream()
                 .filter(intervention -> {
-                    if (intervention.getLocation() == null)
+                    // Get location from equipment
+                    if (intervention.getEquipment() == null) {
                         return false;
-                    double lng = intervention.getLocation().getX();
-                    double lat = intervention.getLocation().getY();
+                    }
+                    
+                    // Check if equipment has location
+                    if (intervention.getEquipment().getLocation() == null) {
+                        return false;
+                    }
+                    
+                    double lng = intervention.getEquipment().getLocation().getX();
+                    double lat = intervention.getEquipment().getLocation().getY();
                     Point interventionPoint = new Point(lng, lat);
-                    // Simple distance check (not accurate but works for small distances)
+                    
+                    // Simple distance check
                     double dx = interventionPoint.getX() - location.getX();
                     double dy = interventionPoint.getY() - location.getY();
-                    double distanceKm = Math.sqrt(dx * dx + dy * dy) * 111.0; // rough conversion
+                    double distanceKm = Math.sqrt(dx * dx + dy * dy) * 111.0;
                     return distanceKm <= (radiusMeters / 1000.0);
                 })
                 .map(this::interventionToMapPoint)
@@ -179,7 +153,7 @@ public class MapService {
     // =========================================================================
 
     /**
-     * Convert Equipment to MapPointDTO.
+     * Convert Equipment to MapPointDTO
      */
     private MapPointDTO equipmentToMapPoint(Equipment equipment) {
         if (equipment.getLocation() == null) {
@@ -190,44 +164,72 @@ public class MapService {
                 .id(equipment.getId())
                 .type("equipment")
                 .label(equipment.getName())
-                .status(equipment.getStatus().toString())
+                .status(equipment.getStatus() != null ? equipment.getStatus() : "UNKNOWN")
                 .latitude(equipment.getLocation().getY())
                 .longitude(equipment.getLocation().getX())
                 .build();
 
         // Add equipment-specific metadata
-        dto.addMetadata("equipmentType", equipment.getType());
+        dto.addMetadata("equipmentType", 
+            equipment.getType() != null ? equipment.getType().toString() : "UNKNOWN");
+        
         if (equipment.getLastMaintenance() != null) {
             dto.addMetadata("lastMaintenance", equipment.getLastMaintenance().toString());
         }
+        
+        // Convert address Object to String
         if (equipment.getAddress() != null) {
-            dto.addMetadata("address", equipment.getAddress());
+            dto.addMetadata("address", equipment.getAddress().toString());
         }
 
         return dto;
     }
 
     /**
-     * Convert Intervention to MapPointDTO.
+     * Convert Intervention to MapPointDTO
      */
     private MapPointDTO interventionToMapPoint(Intervention intervention) {
-        if (intervention.getLocation() == null) {
+        // Get location from equipment
+        if (intervention.getEquipment() == null) {
+            log.warn("Intervention {} has no equipment reference", intervention.getInterventionId());
             return null;
         }
+        
+        if (intervention.getEquipment().getLocation() == null) {
+            log.warn("Equipment for intervention {} has no location", intervention.getInterventionId());
+            return null;
+        }
+
+        // Use equipment location
+        double latitude = intervention.getEquipment().getLocation().getY();
+        double longitude = intervention.getEquipment().getLocation().getX();
+        
+        // Get address from equipment and convert Object to String
+        String address = intervention.getEquipment().getAddress() != null ? 
+                        intervention.getEquipment().getAddress().toString() : null;
 
         MapPointDTO dto = MapPointDTO.builder()
                 .id(intervention.getInterventionId())
                 .type("intervention")
                 .label(intervention.getTitle())
-                .status(intervention.getStatus().toString())
-                .latitude(intervention.getLocation().getY())
-                .longitude(intervention.getLocation().getX())
+                .status(intervention.getStatus() != null ? intervention.getStatus() : "UNKNOWN")
+                .latitude(latitude)
+                .longitude(longitude)
                 .build();
 
-        // Add intervention-specific metadata
-        dto.addMetadata("priority", intervention.getPriority().toString());
+        // Add intervention metadata
+        if (intervention.getPriority() != null) {
+            dto.addMetadata("priority", intervention.getPriority().toString());
+        }
         dto.addMetadata("interventionType", intervention.getInterventionType());
         dto.addMetadata("createdDate", intervention.getCreatedDate().toString());
+        
+        // Add equipment info
+        dto.addMetadata("equipmentId", intervention.getEquipmentId());
+        dto.addMetadata("equipmentName", intervention.getEquipment().getName());
+        dto.addMetadata("equipmentType", 
+            intervention.getEquipment().getType() != null ? 
+            intervention.getEquipment().getType().toString() : "UNKNOWN");
 
         if (intervention.getDescription() != null) {
             dto.addMetadata("description", intervention.getDescription());
@@ -241,8 +243,13 @@ public class MapService {
         if (intervention.getPhotoUrl() != null) {
             dto.addMetadata("photoUrl", intervention.getPhotoUrl());
         }
-        if (intervention.getAddress() != null) {
-            dto.addMetadata("address", intervention.getAddress());
+        if (address != null) {
+            dto.addMetadata("address", address);
+        }
+        
+        // Add technician info if assigned
+        if (intervention.getAssignedTechnicianId() != null) {
+            dto.addMetadata("assignedTechnicianId", intervention.getAssignedTechnicianId());
         }
 
         return dto;
