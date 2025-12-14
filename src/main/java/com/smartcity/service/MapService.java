@@ -53,7 +53,6 @@ public class MapService {
         return technicians;
     }
 
-    
     public OsrmRouteResponse computeRoute(double fromLng, double fromLat, double toLng, double toLat) {
         log.info("Computing route from ({}, {}) to ({}, {})", fromLat, fromLng, toLat, toLng);
         return osrmService.getRoute(fromLng, fromLat, toLng, toLat);
@@ -79,25 +78,33 @@ public class MapService {
      * Get all interventions as map points
      */
     public List<MapPointDTO> getAllInterventionPoints() {
-        List<Intervention> interventions = interventionRepository.findAll();
-        log.info("Retrieved {} intervention records", interventions.size());
-
-        return interventions.stream()
-                .map(this::interventionToMapPoint)
-                .filter(dto -> dto != null) // Filter out nulls
-                .collect(Collectors.toList());
+        // Deprecated: We now merge interventions into equipment points
+        // Returning empty list to avoid duplication on map if called directly
+        return new ArrayList<>();
     }
 
     /**
-     * Get all map points (equipment + interventions combined)
+     * Get all map points (equipment only, enriched with intervention data)
      */
     public List<MapPointDTO> getAllMapPoints() {
-        List<MapPointDTO> allPoints = new ArrayList<>();
-        allPoints.addAll(getAllEquipmentPoints());
-        allPoints.addAll(getAllInterventionPoints());
+        List<Equipment> equipments = equipmentRepository.findAll();
+        List<Intervention> activeInterventions = interventionRepository.findAll().stream()
+                .filter(i -> !"COMPLETED".equals(i.getStatus()) && !"CANCELLED".equals(i.getStatus()))
+                .collect(Collectors.toList());
 
-        log.info("Retrieved {} total map points", allPoints.size());
-        return allPoints;
+        // Map equipmentId -> Active Intervention
+        java.util.Map<String, Intervention> interventionMap = activeInterventions.stream()
+                .filter(i -> i.getEquipmentId() != null)
+                .collect(Collectors.toMap(Intervention::getEquipmentId, i -> i, (existing, replacement) -> existing));
+
+        log.info("Retrieved {} equipment and {} active interventions", equipments.size(), activeInterventions.size());
+
+        return equipments.stream()
+                .map(eq -> {
+                    Intervention activeIntervention = interventionMap.get(eq.getId());
+                    return equipmentToMapPoint(eq, activeIntervention);
+                })
+                .collect(Collectors.toList());
     }
 
     /**
@@ -107,45 +114,24 @@ public class MapService {
         Point location = new Point(longitude, latitude);
         Distance distance = new Distance(radiusMeters / 1000.0, Metrics.KILOMETERS);
 
-        List<MapPointDTO> nearbyPoints = new ArrayList<>();
-
         // Find nearby equipment
         List<Equipment> nearbyEquipment = equipmentRepository.findByLocationNear(location, distance);
-        nearbyPoints.addAll(nearbyEquipment.stream()
-                .map(this::equipmentToMapPoint)
-                .collect(Collectors.toList()));
 
-        // Find nearby interventions
-        List<Intervention> allInterventions = interventionRepository.findAll();
-        allInterventions.stream()
-                .filter(intervention -> {
-                    // Get location from equipment
-                    if (intervention.getEquipment() == null) {
-                        return false;
-                    }
-                    
-                    // Check if equipment has location
-                    if (intervention.getEquipment().getLocation() == null) {
-                        return false;
-                    }
-                    
-                    double lng = intervention.getEquipment().getLocation().getX();
-                    double lat = intervention.getEquipment().getLocation().getY();
-                    Point interventionPoint = new Point(lng, lat);
-                    
-                    // Simple distance check
-                    double dx = interventionPoint.getX() - location.getX();
-                    double dy = interventionPoint.getY() - location.getY();
-                    double distanceKm = Math.sqrt(dx * dx + dy * dy) * 111.0;
-                    return distanceKm <= (radiusMeters / 1000.0);
+        // Fetch active interventions for these equipments
+        List<Intervention> activeInterventions = interventionRepository.findAll().stream()
+                .filter(i -> !"COMPLETED".equals(i.getStatus()) && !"CANCELLED".equals(i.getStatus()))
+                .collect(Collectors.toList());
+
+        java.util.Map<String, Intervention> interventionMap = activeInterventions.stream()
+                .filter(i -> i.getEquipmentId() != null)
+                .collect(Collectors.toMap(Intervention::getEquipmentId, i -> i, (existing, replacement) -> existing));
+
+        return nearbyEquipment.stream()
+                .map(eq -> {
+                    Intervention activeIntervention = interventionMap.get(eq.getId());
+                    return equipmentToMapPoint(eq, activeIntervention);
                 })
-                .map(this::interventionToMapPoint)
-                .forEach(nearbyPoints::add);
-
-        log.info("Found {} points within {} meters of ({}, {})",
-                nearbyPoints.size(), radiusMeters, latitude, longitude);
-
-        return nearbyPoints;
+                .collect(Collectors.toList());
     }
 
     // =========================================================================
@@ -153,105 +139,68 @@ public class MapService {
     // =========================================================================
 
     /**
-     * Convert Equipment to MapPointDTO
+     * Convert Equipment to MapPointDTO, optionally enriching with Intervention data
      */
-    private MapPointDTO equipmentToMapPoint(Equipment equipment) {
+    private MapPointDTO equipmentToMapPoint(Equipment equipment, Intervention activeIntervention) {
         if (equipment.getLocation() == null) {
             return null;
         }
 
+        // Determine status: Use intervention status if active, otherwise equipment
+        // status
+        String status = (activeIntervention != null && activeIntervention.getStatus() != null)
+                ? activeIntervention.getStatus()
+                : (equipment.getStatus() != null ? equipment.getStatus() : "UNKNOWN");
+
         MapPointDTO dto = MapPointDTO.builder()
                 .id(equipment.getId())
-                .type("equipment")
+                .type("EQUIPMENT") // Always EQUIPMENT type
                 .label(equipment.getName())
-                .status(equipment.getStatus() != null ? equipment.getStatus() : "UNKNOWN")
+                .status(status)
                 .latitude(equipment.getLocation().getY())
                 .longitude(equipment.getLocation().getX())
                 .build();
 
         // Add equipment-specific metadata
-        dto.addMetadata("equipmentType", 
-            equipment.getType() != null ? equipment.getType().toString() : "UNKNOWN");
-        
+        dto.addMetadata("equipmentType",
+                equipment.getType() != null ? equipment.getType().toString() : "UNKNOWN");
+
         if (equipment.getLastMaintenance() != null) {
             dto.addMetadata("lastMaintenance", equipment.getLastMaintenance().toString());
         }
-        
+
         // Convert address Object to String
         if (equipment.getAddress() != null) {
             dto.addMetadata("address", equipment.getAddress().toString());
         }
 
+        // Add Active Intervention Metadata if present
+        if (activeIntervention != null) {
+            dto.addMetadata("hasActiveIntervention", "true");
+            dto.addMetadata("interventionId", activeIntervention.getInterventionId());
+            dto.addMetadata("interventionTitle", activeIntervention.getTitle());
+            dto.addMetadata("interventionStatus", activeIntervention.getStatus());
+            dto.addMetadata("interventionPriority", activeIntervention.getPriority());
+            dto.addMetadata("interventionDescription", activeIntervention.getDescription());
+            dto.addMetadata("interventionDate", activeIntervention.getCreatedDate().toString());
+
+            if (activeIntervention.getAssignedTechnicianId() != null) {
+                dto.addMetadata("assignedTechnicianId", activeIntervention.getAssignedTechnicianId());
+            }
+        } else {
+            dto.addMetadata("hasActiveIntervention", "false");
+        }
+
         return dto;
     }
 
-    /**
-     * Convert Intervention to MapPointDTO
-     */
+    // Kept for compatibility but unused by main map logic now
+    private MapPointDTO equipmentToMapPoint(Equipment equipment) {
+        return equipmentToMapPoint(equipment, null);
+    }
+
+    // Kept for compatibility
     private MapPointDTO interventionToMapPoint(Intervention intervention) {
-        // Get location from equipment
-        if (intervention.getEquipment() == null) {
-            log.warn("Intervention {} has no equipment reference", intervention.getInterventionId());
-            return null;
-        }
-        
-        if (intervention.getEquipment().getLocation() == null) {
-            log.warn("Equipment for intervention {} has no location", intervention.getInterventionId());
-            return null;
-        }
-
-        // Use equipment location
-        double latitude = intervention.getEquipment().getLocation().getY();
-        double longitude = intervention.getEquipment().getLocation().getX();
-        
-        // Get address from equipment and convert Object to String
-        String address = intervention.getEquipment().getAddress() != null ? 
-                        intervention.getEquipment().getAddress().toString() : null;
-
-        MapPointDTO dto = MapPointDTO.builder()
-                .id(intervention.getInterventionId())
-                .type("intervention")
-                .label(intervention.getTitle())
-                .status(intervention.getStatus() != null ? intervention.getStatus() : "UNKNOWN")
-                .latitude(latitude)
-                .longitude(longitude)
-                .build();
-
-        // Add intervention metadata
-        if (intervention.getPriority() != null) {
-            dto.addMetadata("priority", intervention.getPriority().toString());
-        }
-        dto.addMetadata("interventionType", intervention.getInterventionType());
-        dto.addMetadata("createdDate", intervention.getCreatedDate().toString());
-        
-        // Add equipment info
-        dto.addMetadata("equipmentId", intervention.getEquipmentId());
-        dto.addMetadata("equipmentName", intervention.getEquipment().getName());
-        dto.addMetadata("equipmentType", 
-            intervention.getEquipment().getType() != null ? 
-            intervention.getEquipment().getType().toString() : "UNKNOWN");
-
-        if (intervention.getDescription() != null) {
-            dto.addMetadata("description", intervention.getDescription());
-        }
-        if (intervention.getCompletedDate() != null) {
-            dto.addMetadata("completedDate", intervention.getCompletedDate().toString());
-        }
-        if (intervention.getPriorityScore() != null) {
-            dto.addMetadata("priorityScore", intervention.getPriorityScore());
-        }
-        if (intervention.getPhotoUrl() != null) {
-            dto.addMetadata("photoUrl", intervention.getPhotoUrl());
-        }
-        if (address != null) {
-            dto.addMetadata("address", address);
-        }
-        
-        // Add technician info if assigned
-        if (intervention.getAssignedTechnicianId() != null) {
-            dto.addMetadata("assignedTechnicianId", intervention.getAssignedTechnicianId());
-        }
-
-        return dto;
+        return null; // Deprecated for map visualization
     }
 }

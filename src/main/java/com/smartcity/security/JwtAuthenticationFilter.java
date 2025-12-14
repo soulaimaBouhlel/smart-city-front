@@ -37,10 +37,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // 1. Extract Token from "Bearer <token>" header
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             token = authHeader.substring(7);
-            
+
             try {
                 // This is the method we fixed previously
-                email = jwtUtil.getEmailFromToken(token); 
+                email = jwtUtil.getEmailFromToken(token);
             } catch (Exception e) {
                 // Log exception if token is invalid or expired
                 System.err.println("JWT error: " + e.getMessage());
@@ -49,22 +49,33 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         // 2. Validate Token and set Security Context
         if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            UserDetails userDetails = this.userDetailsService.loadUserByUsername(email);
+            try {
+                UserDetails userDetails = this.userDetailsService.loadUserByUsername(email);
 
-            if (jwtUtil.validateToken(token)) {
-                
-                // Create Authentication object
-                UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                        userDetails,
-                        null,
-                        userDetails.getAuthorities()
-                );
-                
-                // Add request details
-                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                if (jwtUtil.validateToken(token)) {
 
-                // Set the security context, indicating the user is authenticated
-                SecurityContextHolder.getContext().setAuthentication(authToken);
+                    // Create Authentication object
+                    UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                            userDetails,
+                            null,
+                            userDetails.getAuthorities());
+
+                    // Add request details
+                    authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+                    // Set the security context, indicating the user is authenticated
+                    SecurityContextHolder.getContext().setAuthentication(authToken);
+                }
+            } catch (Exception e) {
+                // If user not found or other error, just ignore and proceed as anonymous
+                // This prevents 403 errors on public endpoints if the token is invalid/old
+                System.err.println("JWT Filter Exception (ignoring): " + e.getMessage());
+                SecurityContextHolder.clearContext(); // Ensure context is clear
+            }
+        } else {
+            // Debug log for anonymous access
+            if (SecurityContextHolder.getContext().getAuthentication() == null) {
+                System.out.println("DEBUG: JWT Filter - Proceeding as anonymous");
             }
         }
 

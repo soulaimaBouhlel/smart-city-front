@@ -30,6 +30,12 @@ public class SecurityConfig {
     @Autowired
     private CustomUserDetailsService userDetailsService;
 
+    @Autowired
+    private com.smartcity.security.CustomAuthenticationEntryPoint unauthorizedHandler;
+
+    @Autowired
+    private com.smartcity.security.CustomAccessDeniedHandler accessDeniedHandler;
+
     // 1. Defines the PasswordEncoder bean
     @Bean
     public PasswordEncoder passwordEncoder(CustomPasswordEncoder customPasswordEncoder) {
@@ -77,24 +83,27 @@ public class SecurityConfig {
                 // Enable CORS with the configuration source
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
+                .exceptionHandling(exception -> exception
+                        .authenticationEntryPoint(unauthorizedHandler)
+                        .accessDeniedHandler(accessDeniedHandler))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // Public endpoints for authentication
+                        // 1. Explicitly allow OPTIONS for all (CORS preflight)
+                        .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
+
+                        // 2. Public endpoints
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/public/**").permitAll()
                         .requestMatchers("/ws/**").permitAll()
-                        .requestMatchers("/api/notifications/**").permitAll() // For testing - remove in production
-                        
-                        
-                        // ✅ TEMPORARY: Allow scheduler endpoints for testing
-                        .requestMatchers("/api/scheduler/**").permitAll()
-                        .requestMatchers("/api/interventions/**").permitAll()
+                        .requestMatchers("/api/notifications/**").permitAll()
+
+                        // 3. Broad controller matchers
                         .requestMatchers("/api/technicians/**").permitAll()
-                        .requestMatchers("/api/citizen/**").permitAll()
+                        .requestMatchers("/api/citizens/**").authenticated() // Require auth for citizens
                         .requestMatchers("/api/equipment/**").permitAll()
                         .requestMatchers("/api/map/**").permitAll()
 
-                        // All other requests require a valid JWT token
+                        // 4. All other requests require a valid JWT token
                         .anyRequest().authenticated());
 
         // Add the JWT filter before the standard authentication filter
