@@ -9,6 +9,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -22,6 +23,7 @@ import java.util.Arrays;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity(prePostEnabled = true) // Add this for method-level security
 public class SecurityConfig {
 
     @Autowired
@@ -94,16 +96,26 @@ public class SecurityConfig {
                         // 2. Public endpoints
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/public/**").permitAll()
+                        .requestMatchers("/api/debug/**").permitAll()
+                        .requestMatchers("/api/test/**").permitAll()
                         .requestMatchers("/ws/**").permitAll()
                         .requestMatchers("/api/notifications/**").permitAll()
 
-                        // 3. Broad controller matchers
-                        .requestMatchers("/api/technicians/**").permitAll()
-                        .requestMatchers("/api/citizens/**").authenticated() // Require auth for citizens
-                        .requestMatchers("/api/equipment/**").permitAll()
-                        .requestMatchers("/api/map/**").permitAll()
+                        // 3. Admin endpoints
+                        .requestMatchers("/api/admins/**").hasAnyRole("USER_ADMIN", "SUPER_ADMIN")
+                        .requestMatchers("/api/maintenance/**").hasAnyRole("MAINTENANCE_ADMIN", "SUPER_ADMIN")
 
-                        // 4. All other requests require a valid JWT token
+                        // 4. Technician endpoints
+                        .requestMatchers("/api/technicians/**").hasRole("TECHNICIAN")
+
+                        // 5. Citizen endpoints
+                        .requestMatchers("/api/citizens/**").hasRole("CITIZEN")
+
+                        // 6. Map & Equipment (Public read access for map)
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/equipment/**").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/map/**").permitAll()
+
+                        // 7. All other requests require authentication
                         .anyRequest().authenticated());
 
         // Add the JWT filter before the standard authentication filter
