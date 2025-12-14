@@ -36,8 +36,16 @@ public interface InterventionRepository extends MongoRepository<Intervention, St
     /**
      * Find unassigned interventions (no technician assigned yet)
      */
+    /**
+     * Find unassigned interventions (no technician assigned yet)
+     */
     List<Intervention> findByAssignedTechnicianIdIsNull();
-    
+
+    /**
+     * Find interventions by citizen ID
+     */
+    List<Intervention> findByCitizenId(String citizenId);
+
     /**
      * Find interventions with equipment (for debugging)
      */

@@ -16,47 +16,50 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 public class Intervention {
-    
+
     @Id
     private String interventionId;
-    
+
     private String title;
     private String description;
     private String interventionType;
-    
+
     private String priority;
-    
+
     @Builder.Default
     private String status = "PENDING";
-    
+
     private String address;
-    
+
     @Builder.Default
     private LocalDateTime createdDate = LocalDateTime.now();
-    
+
     private LocalDateTime completedDate;
     private Integer priorityScore;
     private String photoUrl;
     private String equipmentId;
-    
+
     @DBRef
     private Equipment equipment;
-    
+
     private String assignedTechnicianId;
+
+    // The ID of the citizen who reported this intervention
+    private String citizenId;
 
     // -----------------------------------------------------------------
     // SIMPLE BUILDER CUSTOMIZATION
     // -----------------------------------------------------------------
-    
+
     public static class InterventionBuilder {
         // Builder's status field
         private String status = "PENDING";
-        
+
         public InterventionBuilder priority(String priority) {
             this.priority = priority;
             return this;
         }
-        
+
         public InterventionBuilder status(String status) {
             // Assign parameter to builder's field
             this.status = status;

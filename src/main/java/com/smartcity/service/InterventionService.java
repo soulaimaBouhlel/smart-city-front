@@ -27,21 +27,21 @@ public class InterventionService {
      */
     public Intervention createInterventionForEquipment(String citizenId, String equipmentId,
             String description, String interventionType) {
-        
+
         log.info("🆕 Creating intervention for equipment: {}", equipmentId);
-        
+
         // 1. Validate equipment exists
         Equipment equipment = equipmentRepository.findById(equipmentId)
-            .orElseThrow(() -> new RuntimeException("Equipment not found: " + equipmentId));
-        
+                .orElseThrow(() -> new RuntimeException("Equipment not found: " + equipmentId));
+
         // 2. Get AI analysis with equipment context
         String equipmentType = equipment.getType() != null ? equipment.getType().toString() : "UNKNOWN";
         OpenAIService.InterventionAnalysis analysis = smartSchedulerService.analyzeIntervention(
-            description, interventionType, equipmentType);
-        
-        log.info("🤖 AI Analysis: Priority={}, Urgency={}", 
-                 analysis.getPriority(), analysis.getUrgency());
-        
+                description, interventionType, equipmentType);
+
+        log.info("🤖 AI Analysis: Priority={}, Urgency={}",
+                analysis.getPriority(), analysis.getUrgency());
+
         // 3. Create intervention linked to equipment
         Intervention intervention = Intervention.builder()
                 .interventionId(UUID.randomUUID().toString())
@@ -56,25 +56,25 @@ public class InterventionService {
                 .build();
 
         intervention = interventionRepository.save(intervention);
-        
+
         // 4. Update equipment status
         equipment.setStatus("PENDING");
         equipmentRepository.save(equipment);
-        
+
         // 5. Try to automatically assign technician
         Technician bestTechnician = smartSchedulerService.findBestTechnician(intervention);
-        
+
         if (bestTechnician != null) {
             log.info("✅ Auto-assigning technician: {}", bestTechnician.getName());
-            
+
             intervention.setAssignedTechnicianId(bestTechnician.getTechnicianId());
             intervention.setStatus("IN_PROGRESS");
-            
+
             bestTechnician.increaseWorkload();
             if (bestTechnician.getCurrentWorkload() >= 5) {
                 bestTechnician.setAvailable(false);
             }
-            
+
             interventionRepository.save(intervention);
             technicianRepository.save(bestTechnician);
         } else {
@@ -82,15 +82,14 @@ public class InterventionService {
         }
 
         // 6. Send notification
-        String technicianInfo = bestTechnician != null ? 
-            bestTechnician.getName() : "Awaiting assignment";
-            
+        String technicianInfo = bestTechnician != null ? bestTechnician.getName() : "Awaiting assignment";
+
         Notification notification = Notification.builder()
                 .id(UUID.randomUUID().toString())
                 .title("Intervention Created")
                 .message("Intervention for " + equipment.getName() + " created. " +
-                         "Priority: " + analysis.getPriority() + ". " +
-                         "Technician: " + technicianInfo)
+                        "Priority: " + analysis.getPriority() + ". " +
+                        "Technician: " + technicianInfo)
                 .type(Notification.NotificationType.SYSTEM)
                 .recipientId(citizenId)
                 .timestamp(java.time.LocalDateTime.now())
@@ -100,52 +99,52 @@ public class InterventionService {
         log.info("✅ Intervention created: {}", intervention.getInterventionId());
         return intervention;
     }
-    
+
     /**
      * Manually assign technician to intervention
      */
     public Map<String, Object> assignTechnician(String interventionId, String technicianId) {
         Map<String, Object> result = new HashMap<>();
-        
+
         try {
             // Find intervention
             Intervention intervention = interventionRepository.findById(interventionId)
                     .orElseThrow(() -> new RuntimeException("Intervention not found: " + interventionId));
-            
+
             // Find technician
             Technician technician = technicianRepository.findById(technicianId)
                     .orElseThrow(() -> new RuntimeException("Technician not found: " + technicianId));
-            
+
             // Check if technician is available
             if (!technician.isAvailable()) {
                 result.put("success", false);
                 result.put("message", "Technician is not available");
                 return result;
             }
-            
+
             // Assign
             intervention.setAssignedTechnicianId(technicianId);
             intervention.setStatus("IN_PROGRESS");
-            
+
             // Update workload
             technician.increaseWorkload();
             if (technician.getCurrentWorkload() >= 5) {
                 technician.setAvailable(false);
             }
-            
+
             // Save
             interventionRepository.save(intervention);
             technicianRepository.save(technician);
-            
+
             // Update equipment status
             if (intervention.getEquipmentId() != null) {
                 equipmentRepository.findById(intervention.getEquipmentId())
-                    .ifPresent(equipment -> {
-                        equipment.setStatus("PENDING");
-                        equipmentRepository.save(equipment);
-                    });
+                        .ifPresent(equipment -> {
+                            equipment.setStatus("PENDING");
+                            equipmentRepository.save(equipment);
+                        });
             }
-            
+
             // Notifications
             Notification toTechnician = Notification.builder()
                     .id(UUID.randomUUID().toString())
@@ -156,17 +155,17 @@ public class InterventionService {
                     .timestamp(java.time.LocalDateTime.now())
                     .build();
             notificationService.sendNotification(toTechnician);
-            
+
             result.put("success", true);
             result.put("message", "Technician assigned successfully");
             result.put("intervention", intervention);
             result.put("technician", technician);
-            
+
         } catch (Exception e) {
             result.put("success", false);
             result.put("message", "Assignment failed: " + e.getMessage());
         }
-        
+
         return result;
     }
 
@@ -175,15 +174,15 @@ public class InterventionService {
      */
     public Map<String, Object> updateStatus(String interventionId, String status, String citizenId) {
         Map<String, Object> result = new HashMap<>();
-        
+
         try {
             Intervention intervention = interventionRepository.findById(interventionId)
                     .orElseThrow(() -> new RuntimeException("Intervention not found: " + interventionId));
-            
+
             // Set status as String directly
             String oldStatus = intervention.getStatus();
             intervention.setStatus(status);
-            
+
             // Handle completed/cancelled interventions
             if (status.equalsIgnoreCase("COMPLETED") || status.equalsIgnoreCase("CANCELLED")) {
                 // Decrease technician workload if assigned
@@ -198,44 +197,44 @@ public class InterventionService {
                         technicianRepository.save(technician);
                     }
                 }
-                
+
                 // Update equipment status when intervention completed
                 if (status.equalsIgnoreCase("COMPLETED") && intervention.getEquipmentId() != null) {
                     equipmentRepository.findById(intervention.getEquipmentId())
-                        .ifPresent(equipment -> {
-                            equipment.setStatus("COMPLETED");
-                            equipmentRepository.save(equipment);
-                        });
+                            .ifPresent(equipment -> {
+                                equipment.setStatus("ACTIVE"); // Reset to ACTIVE
+                                equipment.setLastMaintenance(new java.util.Date()); // Update maintenance date
+                                equipmentRepository.save(equipment);
+                            });
                 }
-                
+
                 intervention.setCompletedDate(java.time.LocalDateTime.now());
             }
-            
+
             interventionRepository.save(intervention);
-            
+
             // Send notification
             Notification notification = Notification.builder()
                     .id(UUID.randomUUID().toString())
                     .title("Intervention Status Updated")
-                    .message("Intervention '" + intervention.getTitle() + "' status changed from " + 
-                             oldStatus + " to " + status)
+                    .message("Intervention '" + intervention.getTitle() + "' status changed from " +
+                            oldStatus + " to " + status)
                     .type(Notification.NotificationType.SYSTEM)
                     .recipientId(citizenId)
                     .timestamp(java.time.LocalDateTime.now())
                     .build();
             notificationService.sendNotification(notification);
-            
+
             result.put("success", true);
             result.put("message", "Status updated successfully");
             result.put("intervention", intervention);
-            
+
         } catch (Exception e) {
             result.put("success", false);
             result.put("message", "Status update failed: " + e.getMessage());
         }
-        
+
         return result;
     }
-    
 
 }
