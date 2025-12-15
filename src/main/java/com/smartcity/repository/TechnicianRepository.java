@@ -13,6 +13,8 @@ import java.util.Optional;
 public interface TechnicianRepository extends MongoRepository<Technician, String> {
     Optional<Technician> findByEmail(String email);
 
+    Optional<Technician> findByEmailIgnoreCase(String email);
+
     boolean existsByEmail(String email);
 
     List<Technician> findByAvailable(Boolean available);

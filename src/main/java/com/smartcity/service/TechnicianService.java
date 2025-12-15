@@ -31,7 +31,7 @@ public class TechnicianService {
 
     public Technician createTechnician(Technician technician) {
         Technician savedTechnician = technicianRepository.save(technician);
-        
+
         // Send notification
         com.smartcity.model.Notification notification = com.smartcity.model.Notification.builder()
                 .id(java.util.UUID.randomUUID().toString())
@@ -42,7 +42,7 @@ public class TechnicianService {
                 .timestamp(java.time.LocalDateTime.now())
                 .build();
         notificationService.sendNotification(notification);
-        
+
         return savedTechnician;
     }
 
@@ -57,7 +57,7 @@ public class TechnicianService {
                     technician.setAvailable(technicianDetails.getAvailable());
                     technician.setCurrentWorkload(technicianDetails.getCurrentWorkload());
                     technician.setRating(technicianDetails.getRating());
-                    
+
                     return technicianRepository.save(technician);
                 })
                 .orElseThrow(() -> new RuntimeException("Technician not found with id: " + technicianId));
@@ -92,5 +92,19 @@ public class TechnicianService {
                     return technicianRepository.save(technician);
                 })
                 .orElseThrow(() -> new RuntimeException("Technician not found with id: " + technicianId));
+    }
+
+    public Technician updateLocation(String technicianId,
+            org.springframework.data.mongodb.core.geo.GeoJsonPoint location) {
+        return technicianRepository.findById(technicianId)
+                .map(technician -> {
+                    technician.setLocation(location);
+                    return technicianRepository.save(technician);
+                })
+                .orElseThrow(() -> new RuntimeException("Technician not found with id: " + technicianId));
+    }
+
+    public Optional<Technician> getTechnicianByEmail(String email) {
+        return technicianRepository.findByEmailIgnoreCase(email);
     }
 }
